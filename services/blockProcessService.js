@@ -29,7 +29,7 @@ module.exports = async (currentBlock) => {
    * @type {string}
    */
   let query = {
-    nem: {
+    address: {
       $exists: true,
       $in: _.chain(block.transactions)
         .map(tx => [utils.toAddress(tx.signer, tx.version >> 24), tx.recipient])
@@ -38,10 +38,10 @@ module.exports = async (currentBlock) => {
         .value()
     }
   };
-
+  
   const accounts = await accountModel.find(query);
-  const nemAccounts = _.map(accounts, a => a.nem);
-
+  const nemAccounts = _.map(accounts, a => a.address);
+  
   if(_.isEmpty(nemAccounts)) 
     return Promise.reject({code: 2});
 
@@ -50,12 +50,13 @@ module.exports = async (currentBlock) => {
    * @type {Array}
    */
   return _.chain(block.transactions)
-    .filter(tx => {
+    .filter((tx, idx) => {
       if(tx.type !== 257) return false;
       let elems = _.intersection(
         [tx.recipient, utils.toAddress(tx.signer, tx.version >> 24)],
         nemAccounts
       )
+      block.transactions[idx].participants = elems;
       return !!elems.length;
     })
     .value();

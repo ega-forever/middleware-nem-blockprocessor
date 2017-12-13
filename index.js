@@ -21,6 +21,11 @@ const _ = require('lodash'),
 mongoose.Promise = Promise;
 mongoose.connect(config.mongo.uri, {useMongoClient: true});
 
+mongoose.connection.on('disconnected', function () {
+  log.error('Mongo disconnected!');
+  process.exit(0);
+});
+
 const saveBlockHeight = currentBlock =>
   blockModel.findOneAndUpdate({network: config.nis.network}, {
     $set: {
@@ -29,26 +34,33 @@ const saveBlockHeight = currentBlock =>
     }
   }, {upsert: true});
 
+let lastBlockHeight = 0;
+
 const init = async function () {
   let currentBlock = await blockModel.findOne({ network: config.nis.network }).sort('-block');
   currentBlock = _.chain(currentBlock).get('block', 0).add(0).value();
-  log.info(`search from block:${currentBlock} for network:${config.nis.network}`);
+  log.info(`Search from block ${currentBlock} for network:${config.nis.network}`);
 
   // Establishing RabbitMQ connection
   let amqpInstance = await amqp.connect(config.rabbit.url)
     .catch(() => {
-      log.error('rabbitmq process has finished!');
+      log.error('Rabbitmq process has finished!');
       process.exit(0);
     });
 
   let channel = await amqpInstance.createChannel();
 
   channel.on('close', () => {
-    log.error('rabbitmq process has finished!');
+    log.error('Rabbitmq process has finished!');
     process.exit(0);
   });
 
-  await channel.assertExchange('events', 'topic', {durable: false});
+  try {
+    await channel.assertExchange('events', 'topic', {durable: false});
+  } catch (e) {
+    log.error(e);
+    channel = await amqpConn.createChannel();
+  }
 
   /**
    * Recursive routine for processing incoming blocks.
@@ -57,32 +69,38 @@ const init = async function () {
   let processBlock = async () => {
     try {
       let filteredTxs = await Promise.resolve(blockProcessService(currentBlock)).timeout(20000);
-      console.log(currentBlock, filteredTxs.length);
+
+      log.info(`Publishing ${filteredTxs.length} transactions from block (${currentBlock + 1})`);
 
       for (let tx of filteredTxs) {
-        let addresses = [tx.recipient, utils.toAddress(tx.signer, tx.version >> 24)];
-        for(let address of addresses){
-          console.log('publishing: ',`${config.rabbit.serviceName}_transaction.${address}`);
-          await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(tx)));
+        for(let address of tx.participants) {
+          const payload = JSON.stringify(_.omit(tx, ['participants']));
+          await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(payload));
         }
       }
 
-      await saveBlockHeight(currentBlock);
+      await saveBlockHeight(currentBlock + 1);
       
       currentBlock++;
       processBlock();
     } catch (err) 
     {
-      if(err instanceof Promise.TimeoutError)
+      if(err instanceof Promise.TimeoutError) {
+        log.error('Timeout processing the block')
         return processBlock();
+      }
 
       if(_.get(err, 'code') === 0) {
-        log.info(`await for next block ${currentBlock}`);
+        if(lastBlockHeight !== currentBlock)
+          log.info(`Awaiting for next block`);
+        
+        lastBlockHeight = currentBlock;  
         return setTimeout(processBlock, 10000);
       }
 
       if(_.get(err, 'code') === 2) {
-        await saveBlockHeight(currentBlock);
+        log.info(`Skipping the block (${currentBlock + 1})`);
+        await saveBlockHeight(currentBlock + 1);
       }
 
       currentBlock++;
