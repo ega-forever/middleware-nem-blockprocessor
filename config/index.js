@@ -5,8 +5,7 @@ const config = {
     uri: process.env.MONGO_URI || 'mongodb://localhost:27017/data-nem'
   },
   nis: {
-    // server: 'http://go.nem.ninja:7890',
-    server: 'http://23.228.67.85:7890',
+    server: process.env.NIS || 'http://localhost:7890',
     network: process.env.NETWORK || 'testnet',
   },
   rabbit: {
