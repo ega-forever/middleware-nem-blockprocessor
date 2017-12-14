@@ -16,7 +16,7 @@ module.exports = async (currentBlock) => {
    */
   const blockHeight = await nis.blockHeight();
 
-  if (blockHeight <= currentBlock)
+  if (!blockHeight || blockHeight <= currentBlock)
     return Promise.reject({code: 0});
 
   let block = await nis.getBlock(currentBlock + 1);
