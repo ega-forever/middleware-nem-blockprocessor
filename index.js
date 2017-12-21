@@ -19,7 +19,7 @@ const _ = require('lodash'),
   blockProcessService = require('./services/blockProcessService');
 
 mongoose.Promise = Promise;
-mongoose.connect(config.mongo.uri, {useMongoClient: true});
+mongoose.connect(config.mongo.accounts.uri, {useMongoClient: true});
 
 mongoose.connection.on('disconnected', function () {
   log.error('Mongo disconnected!');
