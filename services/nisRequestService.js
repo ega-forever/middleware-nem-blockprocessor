@@ -1,7 +1,7 @@
 const request = require('request-promise'),
   config = require('../config'),
   _ = require('lodash'),
-  { URL } = require('url'),
+  {URL} = require('url'),
   bunyan = require('bunyan'),
   log = bunyan.createLogger({name: 'nemBlockprocessor.requestService'});
 
@@ -12,7 +12,7 @@ const blockHeight = async () => {
   return _.get(res, 'height');
 };
 
-const getBlock = async (blockHeight) => post('/block/at/public', {height:blockHeight});
+const getBlock = async (blockHeight) => post('/block/at/public', {height: blockHeight});
 
 const get = query => makeRequest(query, 'GET');
 const post = (query, body) => makeRequest(query, 'POST', body);
@@ -31,7 +31,7 @@ const errorHandler = err => {
   log.error(err);
 };
 
-module.exports = { 
-  blockHeight, 
-  getBlock 
+module.exports = {
+  blockHeight,
+  getBlock
 };

@@ -2,7 +2,7 @@
  * Mongoose model. Accounts
  * @module models/accountModel
  * @returns {Object} Mongoose model
- * @requires factory/accountMessageFactory
+ * @requires factory/addressMessageFactory
  */
 
 const mongoose = require('mongoose'),
@@ -23,4 +23,4 @@ const Account = new mongoose.Schema({
   mosaics: {type: mongoose.Schema.Types.Mixed, default: {}}
 });
 
-module.exports = mongoose.model(`${config.mongo.accounts.collectionPrefix}Account`, Account);
+module.exports = mongoose.accounts.model(`${config.mongo.accounts.collectionPrefix}Account`, Account);
