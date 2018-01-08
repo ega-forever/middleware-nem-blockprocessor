@@ -15,7 +15,6 @@ mongoose.Promise = Promise; // Use custom Promises
 mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
 mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 
-
 const _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
@@ -41,7 +40,7 @@ const saveBlockHeight = currentBlock =>
 let lastBlockHeight = 0;
 
 const init = async function () {
-  let currentBlock = await blockModel.findOne({ network: config.nis.network }).sort('-block');
+  let currentBlock = await blockModel.findOne({network: config.nis.network}).sort('-block');
   currentBlock = _.chain(currentBlock).get('block', 0).add(0).value();
   log.info(`Search from block ${currentBlock} for network:${config.nis.network}`);
 
@@ -77,31 +76,32 @@ const init = async function () {
       log.info(`Publishing ${filteredTxs.length} transactions from block (${currentBlock + 1})`);
 
       for (let tx of filteredTxs) {
-        for(let address of tx.participants) {
+        for (let address of tx.participants) {
           const payload = JSON.stringify(_.omit(tx, ['participants']));
           await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(payload));
         }
       }
 
       await saveBlockHeight(currentBlock + 1);
-      
+
       currentBlock++;
       processBlock();
     } catch (err) {
-      if(err instanceof Promise.TimeoutError) {
+      if (err instanceof Promise.TimeoutError) {
         log.error('Timeout processing the block');
         return processBlock();
       }
 
-      if(_.get(err, 'code') === 0) {
-        if(lastBlockHeight !== currentBlock)
-        {log.info('Awaiting for next block');}
-        
-        lastBlockHeight = currentBlock;  
+      if (_.get(err, 'code') === 0) {
+        if (lastBlockHeight !== currentBlock)
+          log.info('Awaiting for next block');
+
+        lastBlockHeight = currentBlock;
         return setTimeout(processBlock, 10000);
       }
 
-      if(_.get(err, 'code') === 2) {
+
+      if (_.get(err, 'code') === 2) {
         log.info(`Skipping the block (${currentBlock + 1})`);
         await saveBlockHeight(currentBlock + 1);
       }
