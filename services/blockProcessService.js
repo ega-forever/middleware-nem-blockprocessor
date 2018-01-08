@@ -16,11 +16,13 @@ module.exports = async (currentBlock) => {
    */
   const blockHeight = await nis.blockHeight();
 
-  if (!blockHeight || blockHeight <= currentBlock) {
+  if (!blockHeight || blockHeight <= currentBlock)
     return Promise.reject({code: 0});
-  }
 
   let block = await nis.getBlock(currentBlock + 1);
+
+  if (!block)
+    return Promise.reject({code: 0});
 
   if (!_.get(block, 'transactions') || _.isEmpty(block.transactions)) {
     return Promise.reject({code: 2});
@@ -44,8 +46,9 @@ module.exports = async (currentBlock) => {
   const accounts = await accountModel.find(query);
   const nemAccounts = _.map(accounts, a => a.address);
 
-  if (_.isEmpty(nemAccounts))
-  {return Promise.reject({code: 2});}
+  if (_.isEmpty(nemAccounts)) {
+    return Promise.reject({code: 2});
+  }
 
   /**
    * Filtering for customer's transactions
