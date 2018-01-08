@@ -16,13 +16,15 @@ module.exports = async (currentBlock) => {
    */
   const blockHeight = await nis.blockHeight();
 
-  if (!blockHeight || blockHeight <= currentBlock)
+  if (!blockHeight || blockHeight <= currentBlock) {
     return Promise.reject({code: 0});
+  }
 
   let block = await nis.getBlock(currentBlock + 1);
 
-  if (!_.get(block, 'transactions') || _.isEmpty(block.transactions))
+  if (!_.get(block, 'transactions') || _.isEmpty(block.transactions)) {
     return Promise.reject({code: 2});
+  }
 
   /**
    * Search for tx's address occurence in DB
@@ -38,12 +40,12 @@ module.exports = async (currentBlock) => {
         .value()
     }
   };
-  
+
   const accounts = await accountModel.find(query);
   const nemAccounts = _.map(accounts, a => a.address);
-  
-  if(_.isEmpty(nemAccounts)) 
-    return Promise.reject({code: 2});
+
+  if (_.isEmpty(nemAccounts))
+  {return Promise.reject({code: 2});}
 
   /**
    * Filtering for customer's transactions
@@ -51,11 +53,11 @@ module.exports = async (currentBlock) => {
    */
   return _.chain(block.transactions)
     .filter((tx, idx) => {
-      if(tx.type !== 257) return false;
+      if (tx.type !== 257) return false;
       let elems = _.intersection(
         [tx.recipient, utils.toAddress(tx.signer, tx.version >> 24)],
         nemAccounts
-      )
+      );
       block.transactions[idx].participants = elems;
       return !!elems.length;
     })

@@ -2,29 +2,33 @@
  * Middleware service for handling NEM transactions on Chronobank platform
  * @module Chronobank/nem-blockprocessor
  * @requires config
- * @requires utils
  * @requires models/blockModel
  * @requires services/blockProcessService
  */
 
-const _ = require('lodash'),
+
+const config = require('./config'),
   Promise = require('bluebird'),
-  mongoose = require('mongoose'),
+  mongoose = require('mongoose');
+
+mongoose.Promise = Promise; // Use custom Promises
+mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
+mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
+
+
+const _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
-  config = require('./config'),
-  utils = require('./utils'),
   blockModel = require('./models/blockModel'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
   blockProcessService = require('./services/blockProcessService');
 
-mongoose.Promise = Promise;
-mongoose.connect(config.mongo.uri, {useMongoClient: true});
-
-mongoose.connection.on('disconnected', function () {
-  log.error('Mongo disconnected!');
-  process.exit(0);
-});
+[mongoose.accounts, mongoose.connection].forEach(connection =>
+  connection.on('disconnected', function () {
+    log.error('mongo disconnected!');
+    process.exit(0);
+  })
+);
 
 const saveBlockHeight = currentBlock =>
   blockModel.findOneAndUpdate({network: config.nis.network}, {
@@ -59,7 +63,7 @@ const init = async function () {
     await channel.assertExchange('events', 'topic', {durable: false});
   } catch (e) {
     log.error(e);
-    channel = await amqpConn.createChannel();
+    channel = await amqpInstance.createChannel();
   }
 
   /**
@@ -83,16 +87,15 @@ const init = async function () {
       
       currentBlock++;
       processBlock();
-    } catch (err) 
-    {
+    } catch (err) {
       if(err instanceof Promise.TimeoutError) {
-        log.error('Timeout processing the block')
+        log.error('Timeout processing the block');
         return processBlock();
       }
 
       if(_.get(err, 'code') === 0) {
         if(lastBlockHeight !== currentBlock)
-          log.info(`Awaiting for next block`);
+        {log.info('Awaiting for next block');}
         
         lastBlockHeight = currentBlock;  
         return setTimeout(processBlock, 10000);
