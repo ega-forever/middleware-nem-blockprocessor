@@ -5,8 +5,6 @@ const request = require('request-promise'),
   bunyan = require('bunyan'),
   log = bunyan.createLogger({name: 'nemBlockprocessor.requestService'});
 
-const baseUrl = config.nis.server;
-
 const blockHeight = async () => {
   const res = await get('/chain/height');
   return _.get(res, 'height');
@@ -21,7 +19,7 @@ const makeRequest = (path, method, body) => {
   const options = {
     method,
     body,
-    uri: new URL(path, baseUrl),
+    uri: new URL(path, config.nis.server),
     json: true
   };
   return request(options).catch(e => errorHandler(e));
