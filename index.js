@@ -33,7 +33,7 @@ const _ = require('lodash'),
 );
 
 const saveBlockHeight = currentBlock =>
-  blockModel.findOneAndUpdate({network: config.nis.network}, {
+  blockModel.findOneAndUpdate({network: config.nis.networkName}, {
     $set: {
       block: currentBlock,
       created: Date.now()
@@ -41,10 +41,10 @@ const saveBlockHeight = currentBlock =>
   }, {upsert: true});
 
 const init = async function () {
-  let currentBlock = await blockModel.findOne({network: config.nis.network}).sort('-block');
+  let currentBlock = await blockModel.findOne({network: config.nis.networkName}).sort('-block');
   let lastBlockHeight = 0;
   currentBlock = _.chain(currentBlock).get('block', 0).add(0).value();
-  log.info(`Search from block ${currentBlock} for network:${config.nis.network}`);
+  log.info(`Search from block ${currentBlock} for network:${config.nis.networkName}`);
 
   // Establishing RabbitMQ connection
   const amqpInstance = await amqp.connect(config.rabbit.url)
