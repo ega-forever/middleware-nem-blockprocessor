@@ -39,6 +39,8 @@
     "mongoose": "^4.13.6",
     "mongoose-long": "^0.1.1",
     "request": "^2.83.0",
-    "request-promise": "^4.2.2"
+    "request-promise": "^4.2.2",
+    "sockjs-client": "^1.1.4",
+    "webstomp-client": "^1.2.0"
   }
 }
