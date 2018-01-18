@@ -75,17 +75,18 @@ const init = async function () {
     let data = JSON.parse(message.body);
     let filteredTxs = await txsProcessService([data.transaction]);
     for (let tx of filteredTxs) {
-      for (let address of tx.participants) {
-        let payload = _.chain(tx)
-          .omit(['participants'])
-          .merge({unconfirmed: true})
-          .value();
 
-        if(payload && payload.signer)
-          payload.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+      if (tx && tx.signer)
+        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
 
+      let payload = _.chain(tx)
+        .omit(['participants'])
+        .merge({unconfirmed: true})
+        .value();
+
+      for (let address of _.union(tx.participants, [tx.sender]))
         await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-      }
+
     }
   });
 
