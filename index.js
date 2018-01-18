@@ -81,8 +81,8 @@ const init = async function () {
           .merge({unconfirmed: true})
           .value();
 
-        if(tx && tx.signer)
-          tx.sender = nem.model.address.toAddress(tx.transaction.signer, config.nis.network);
+        if(payload && payload.signer)
+          payload.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
 
         await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
       }
