@@ -12,6 +12,11 @@ const blockHeight = async () => {
 
 const getBlock = async (blockHeight) => post('/block/at/public', {height: blockHeight});
 
+const getIncomingTransactions = async (address) => {
+  const res = await get(`/account/transfers/incoming?address=${address}`);
+  return _.get(res, 'data');
+};
+
 const get = query => makeRequest(query, 'GET');
 const post = (query, body) => makeRequest(query, 'POST', body);
 
@@ -31,5 +36,6 @@ const errorHandler = err => {
 
 module.exports = {
   blockHeight,
-  getBlock
+  getBlock,
+  getIncomingTransactions
 };
