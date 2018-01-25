@@ -75,19 +75,21 @@ const init = async function () {
   client.subscribe('/unconfirmed/*', async function (message) {
     let data = JSON.parse(message.body);
 
-    let filteredTxs = await txsProcessService([data.transaction]).catch(()=>[]);
+    let address = message.headers.destination.replace('/unconfirmed/', '');
+
+    let filteredTxs = await txsProcessService([data.transaction]).catch(() => []);
     for (let tx of filteredTxs) {
 
-      if (tx && tx.signer)
-      {tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);}
+      if (tx && tx.signer) {
+        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+      }
 
       let payload = _.chain(tx)
         .omit(['participants'])
         .merge({unconfirmed: true, hash: data.meta.hash.data})
         .value();
 
-      for (let address of _.union(tx.participants, [tx.sender]))
-      {await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));}
+      await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
 
     }
   });
@@ -112,19 +114,20 @@ const init = async function () {
 
         let accountTxs = await nis.getIncomingTransactions(tx.recipient); //todo replace with hash calculation
         let hash = _.chain(accountTxs)
-          .find(tx=> _.get(tx, 'transaction.transaction.signature') === tx.signature)
+          .find(tx => _.get(tx, 'transaction.transaction.signature') === tx.signature)
           .get('meta.hash.data')
           .value();
 
-        if (tx && tx.signer)
-        {tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);}
+        if (tx && tx.signer) {
+          tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+        }
 
         let payload = _.chain(tx)
           .omit(['participants'])
           .merge({hash: hash})
           .value();
 
-        for (let address of tx.participants) {
+        for (let address of _.compact([tx.sender, tx.recipient])) {
           await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
         }
       }
@@ -140,8 +143,9 @@ const init = async function () {
       }
 
       if (_.get(err, 'code') === 0) {
-        if (lastBlockHeight !== currentBlock)
-        {log.info('Awaiting for next block');}
+        if (lastBlockHeight !== currentBlock) {
+          log.info('Awaiting for next block');
+        }
 
         lastBlockHeight = currentBlock;
         return setTimeout(processBlock, 10000);
