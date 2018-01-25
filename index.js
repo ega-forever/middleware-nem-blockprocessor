@@ -22,6 +22,7 @@ const _ = require('lodash'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
+  nem = require('nem-sdk').default,
   txsProcessService = require('./services/txsProcessService'),
   blockProcessService = require('./services/blockProcessService');
 
@@ -73,16 +74,19 @@ const init = async function () {
   client.subscribe('/unconfirmed/*', async function (message) {
     let data = JSON.parse(message.body);
     let filteredTxs = await txsProcessService([data.transaction]);
-    console.log(filteredTxs);
     for (let tx of filteredTxs) {
-      for (let address of tx.participants) {
-        let payload = _.chain(tx)
-          .omit(['participants'])
-          .merge({unconfirmed: true})
-          .value();
 
+      if (tx && tx.signer)
+        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+
+      let payload = _.chain(tx)
+        .omit(['participants'])
+        .merge({unconfirmed: true})
+        .value();
+
+      for (let address of _.union(tx.participants, [tx.sender]))
         await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-      }
+
     }
   });
 
