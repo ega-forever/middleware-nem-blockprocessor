@@ -6,7 +6,6 @@
 const _ = require('lodash'),
   nis = require('./nisRequestService'),
   utils = require('../utils'),
-  accountModel = require('../models/accountModel'),
   txsProcessService = require('./txsProcessService'),
   Promise = require('bluebird');
 
@@ -18,12 +17,12 @@ module.exports = async (currentBlock) => {
   const blockHeight = await nis.blockHeight();
 
   if (!blockHeight || blockHeight <= currentBlock)
-    return Promise.reject({code: 0});
+  {return Promise.reject({code: 0});}
 
   let block = await nis.getBlock(currentBlock + 1);
 
   if (!block)
-    return Promise.reject({code: 0});
+  {return Promise.reject({code: 0});}
 
   if (!_.get(block, 'transactions') || _.isEmpty(block.transactions)) {
     return Promise.reject({code: 2});
