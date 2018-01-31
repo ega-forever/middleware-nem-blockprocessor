@@ -23,6 +23,7 @@ const _ = require('lodash'),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
   nem = require('nem-sdk').default,
+  nis = require('./services/nisRequestService'),
   txsProcessService = require('./services/txsProcessService'),
   blockProcessService = require('./services/blockProcessService');
 
@@ -62,7 +63,7 @@ const init = async function () {
   });
 
   const ws = new SockJS(`${config.nis.websocket}/w/messages`);
-  const client = Stomp.over(ws, {heartbeat: false, debug: false});
+  const client = Stomp.over(ws, {heartbeat: true, debug: false});
 
   await new Promise(res =>
     client.connect({}, res, () => {
@@ -73,19 +74,22 @@ const init = async function () {
 
   client.subscribe('/unconfirmed/*', async function (message) {
     let data = JSON.parse(message.body);
-    let filteredTxs = await txsProcessService([data.transaction]);
+
+    let address = message.headers.destination.replace('/unconfirmed/', '');
+
+    let filteredTxs = await txsProcessService([data.transaction]).catch(() => []);
     for (let tx of filteredTxs) {
 
-      if (tx && tx.signer)
+      if (tx && tx.signer) {
         tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+      }
 
       let payload = _.chain(tx)
         .omit(['participants'])
-        .merge({unconfirmed: true})
+        .merge({unconfirmed: true, hash: data.meta.hash.data})
         .value();
 
-      for (let address of _.union(tx.participants, [tx.sender]))
-        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
+      await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
 
     }
   });
@@ -104,13 +108,27 @@ const init = async function () {
   let processBlock = async () => {
     try {
       let filteredTxs = await Promise.resolve(blockProcessService(currentBlock)).timeout(20000);
-
       log.info(`Publishing ${filteredTxs.length} transactions from block (${currentBlock + 1})`);
 
       for (let tx of filteredTxs) {
-        for (let address of tx.participants) {
-          const payload = JSON.stringify(_.omit(tx, ['participants']));
-          await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(payload));
+
+        let accountTxs = await nis.getIncomingTransactions(tx.recipient); //todo replace with hash calculation
+        let hash = _.chain(accountTxs)
+          .find(tx => _.get(tx, 'transaction.transaction.signature') === tx.signature)
+          .get('meta.hash.data')
+          .value();
+
+        if (tx && tx.signer) {
+          tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+        }
+
+        let payload = _.chain(tx)
+          .omit(['participants'])
+          .merge({hash: hash})
+          .value();
+
+        for (let address of _.compact([tx.sender, tx.recipient])) {
+          await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
         }
       }
 
@@ -125,8 +143,9 @@ const init = async function () {
       }
 
       if (_.get(err, 'code') === 0) {
-        if (lastBlockHeight !== currentBlock)
+        if (lastBlockHeight !== currentBlock) {
           log.info('Awaiting for next block');
+        }
 
         lastBlockHeight = currentBlock;
         return setTimeout(processBlock, 10000);

@@ -15,8 +15,10 @@ module.exports = async (txs) => {
    * @type {string}
    */
   let query = {
+    isActive: {
+      $ne: false
+    },
     address: {
-      $exists: true,
       $in: _.chain(txs)
         .map(tx => [utils.toAddress(tx.signer, tx.version >> 24), tx.recipient])
         .flattenDeep()
