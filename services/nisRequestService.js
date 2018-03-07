@@ -12,6 +12,11 @@ const blockHeight = async () => {
 
 const getBlock = async (blockHeight) => post('/block/at/public', {height: blockHeight});
 
+const getLast10BlocksFromHeight = async (blockHeight) => {
+  let res = await post('/local/chain/blocks-after', {height: blockHeight});
+  return _.get(res, 'data');
+};
+
 const getIncomingTransactions = async (address) => {
   const res = await get(`/account/transfers/incoming?address=${address}`);
   return _.get(res, 'data');
@@ -37,5 +42,6 @@ const errorHandler = err => {
 module.exports = {
   blockHeight,
   getBlock,
-  getIncomingTransactions
+  getIncomingTransactions,
+  getLast10BlocksFromHeight
 };
