@@ -17,6 +17,9 @@ const config = {
     networkName: process.env.NETWORK_NAME || 'testnet',
     websocket: process.env.WEBSOCKET_NIS || 'http://localhost:7778'
   },
+  consensus: {
+    lastBlocksValidateAmount: parseInt(process.env.CONSENSUS_BLOCK_VALIDATE_AMOUNT) || 12
+  },
   rabbit: {
     url: process.env.RABBIT_URI || 'amqp://localhost:5672',
     serviceName: process.env.RABBIT_SERVICE_NAME || 'app_nem'

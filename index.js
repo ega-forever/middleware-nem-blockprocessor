@@ -23,6 +23,7 @@ const _ = require('lodash'),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
   nem = require('nem-sdk').default,
+  BlockCacheService = require('./services/blockCacheService'),
   nis = require('./services/nisRequestService'),
   txsProcessService = require('./services/txsProcessService'),
   blockProcessService = require('./services/blockProcessService');
@@ -34,21 +35,10 @@ const _ = require('lodash'),
   })
 );
 
-const saveBlockHeight = currentBlock =>
-  blockModel.findOneAndUpdate({network: config.nis.networkName}, {
-    $set: {
-      block: currentBlock,
-      created: Date.now()
-    }
-  }, {upsert: true});
-
 const init = async function () {
-  let currentBlock = await blockModel.findOne({network: config.nis.networkName}).sort('-block');
-  let lastBlockHeight = 0;
-  currentBlock = _.chain(currentBlock).get('block', 0).add(0).value();
-  log.info(`Search from block ${currentBlock} for network:${config.nis.networkName}`);
 
-  // Establishing RabbitMQ connection
+  const blockCacheService = new BlockCacheService();
+
   const amqpInstance = await amqp.connect(config.rabbit.url)
     .catch(() => {
       log.error('Rabbitmq process has finished!');
@@ -62,8 +52,11 @@ const init = async function () {
     process.exit(0);
   });
 
+  await channel.assertExchange('events', 'topic', {durable: false});
+
   const ws = new SockJS(`${config.nis.websocket}/w/messages`);
   const client = Stomp.over(ws, {heartbeat: true, debug: false});
+//var endpoint = nem.model.objects.create("endpoint")("http://myNode", 7890);
 
   await new Promise(res =>
     client.connect({}, res, () => {
@@ -71,6 +64,23 @@ const init = async function () {
       process.exit(0);
     })
   );
+
+  blockCacheService.events.on('block', async block => {
+    log.info('%s (%d) added to cache.', block.hash, block.number);
+/*    const filteredTxs = await filterTxsByAccountService(block.transactions);
+
+    for (let tx of filteredTxs) {
+      let addresses = _.chain([tx.to, tx.from])
+        .union(tx.logs.map(log => log.address))
+        .uniq()
+        .value();
+
+      for (let address of addresses)
+        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(tx)));
+    }*/
+  });
+
+  await blockCacheService.startSync();
 
   client.subscribe('/unconfirmed/*', async function (message) {
     let data = JSON.parse(message.body);
@@ -94,73 +104,5 @@ const init = async function () {
     }
   });
 
-  try {
-    await channel.assertExchange('events', 'topic', {durable: false});
-  } catch (e) {
-    log.error(e);
-    channel = await amqpInstance.createChannel();
-  }
-
-  /**
-   * Recursive routine for processing incoming blocks.
-   * @return {undefined}
-   */
-  let processBlock = async () => {
-    try {
-      let filteredTxs = await Promise.resolve(blockProcessService(currentBlock)).timeout(20000);
-      log.info(`Publishing ${filteredTxs.length} transactions from block (${currentBlock + 1})`);
-
-      for (let tx of filteredTxs) {
-
-        let accountTxs = await nis.getIncomingTransactions(tx.recipient); //todo replace with hash calculation
-        let hash = _.chain(accountTxs)
-          .find(tx => _.get(tx, 'transaction.transaction.signature') === tx.signature)
-          .get('meta.hash.data')
-          .value();
-
-        if (tx && tx.signer) {
-          tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
-        }
-
-        let payload = _.chain(tx)
-          .omit(['participants'])
-          .merge({hash: hash})
-          .value();
-
-        for (let address of _.compact([tx.sender, tx.recipient])) {
-          await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-        }
-      }
-
-      await saveBlockHeight(currentBlock + 1);
-
-      currentBlock++;
-      processBlock();
-    } catch (err) {
-      if (err instanceof Promise.TimeoutError) {
-        log.error('Timeout processing the block');
-        return processBlock();
-      }
-
-      if (_.get(err, 'code') === 0) {
-        if (lastBlockHeight !== currentBlock) {
-          log.info('Awaiting for next block');
-        }
-
-        lastBlockHeight = currentBlock;
-        return setTimeout(processBlock, 10000);
-      }
-
-      if (_.get(err, 'code') === 2) {
-        log.info(`Skipping the block (${currentBlock + 1})`);
-        await saveBlockHeight(currentBlock + 1);
-      }
-
-      currentBlock++;
-      processBlock();
-    }
-  };
-
-  processBlock();
 };
 module.exports = init();
