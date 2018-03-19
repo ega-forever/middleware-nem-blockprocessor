@@ -8,71 +8,99 @@ mongoose.Promise = Promise; // Use custom Promises
 mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
 mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 
-const expect = require('chai').expect,
-  blockModel = require('../models/blockModel'),
-  blockProcessService = require('../services/blockProcessService'),
-  accountModel = require('../models/accountModel'),
+const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
+  connectToQueue = require('./helpers/connectToQueue'),
+  clearQueues = require('./helpers/clearQueues'),
+  consumeMessages = require('./helpers/consumeMessages'),
+  awaitLastBlock = require('./helpers/awaitLastBlock'),
+  createTransaction = require('./helpers/createTransaction'),
+  findBlockWithTransactions = require('./helpers/findBlockWithTransactions'),
+  consumeStompMessages = require('./helpers/consumeStompMessages'),
+  net = require('net'),
+  WebSocket = require('ws'),
   nis = require('../services/nisRequestService'),
+  expect = require('chai').expect,
   amqp = require('amqplib'),
-  ctx = {},
-  utils = require('../utils');
+  Stomp = require('webstomp-client');
 
-let blockHeight = 0;
+let accounts = [], amqpInstance, blockHeight;
 
 describe('core/block processor', function () {
+
+
   before(async () => {
-    blockHeight = await nis.blockHeight();
-    expect(blockHeight).that.is.a('number');
+    //await awaitLastBlock();
+
+    const block = await findBlockWithTransactions(700, 0);
+    accounts.push(await saveAccountForAddress(block.transactions[0].recipient));
+    accounts.push(await saveAccountForAddress(block.transactions[0].sender));
+
+    amqpInstance = await amqp.connect(config.rabbit.url);
+    
+    await clearQueues(amqpInstance);
   });
 
-  after(() => {
+  after(async () => {
     return mongoose.disconnect();
   });
 
-  it('validate block number is not equal to 0', async () => {
-    ctx.block = await blockModel.findOne({});
-    expect(ctx.block).to.have.property('block');
-    expect(ctx.block.block).to.be.above(0);
-  });
+  it('send some nem from account0 to account1 and validate countMessages(2) and structure message', async () => {
 
-  it('find future block with transactions', async () => {
 
-    let findBlock = async (height) => {
-      let block = await nis.getBlock(ctx.block.block + height);
-      if (block.transactions.length === 0)
-        return await findBlock(height + 1);
-      return block;
+    const checkMessage = function (content) {
+      expect(content).to.contain.all.keys(
+        'hash',
+        'nonce',
+        'number',
+        'sender',
+        'recipient',
+        'type',
+        'deadline',
+        'timeStamp',
+        'unconfirmed'
+      );
     };
 
-    let block = await findBlock(700);
-
-    expect(block).to.have.property('transactions');
-    ctx.block = block;
+    return await Promise.all([
+      (async() => {
+        await createTransaction(accounts[0], accounts[1], 100);
+      })(),
+      // (async () => {
+      //   const channel = await amqpInstance.createChannel();  
+      //   await connectToQueue(channel);
+      //   return await consumeMessages(1, channel, (message) => {
+      //     checkMessage(JSON.parse(message.content));
+      //   });
+      // })(),
+      // (async () => {
+      //   const ws = new WebSocket('ws://localhost:5672/ws');
+      //   const client = Stomp.over(ws, {heartbeat: false, debug: false});
+      //   return await consumeStompMessages(1, client, (message) => {
+      //     checkMessage(JSON.parse(message.body));
+      //   });
+      // })()
+    ]);
   });
 
-  it('add recipient from first tx of found block', async () => {
-    await new accountModel({address: ctx.block.transactions[0].recipient}).save();
-  });
+  // it('validate notification via amqp about new tx', async () => {
 
-  it('validate notification via amqp about new tx', async () => {
+  //   let amqpInstance = await amqp.connect(config.rabbit.url);
+  //   let channel = await amqpInstance.createChannel();
 
-    let amqpInstance = await amqp.connect(config.rabbit.url);
-    let channel = await amqpInstance.createChannel();
+  //   try {
+  //     await channel.assertExchange('events', 'topic', {durable: false});
+  //     await channel.assertQueue(`app_${config.rabbit.serviceName}_test.transaction`);
+  //     await channel.bindQueue(`app_${config.rabbit.serviceName}_test.transaction`, 'events', `${config.rabbit.serviceName}_transaction.*`);
+  //   } catch (e) {
+  //     channel = await amqpInstance.createChannel();
+  //   }
 
-    try {
-      await channel.assertExchange('events', 'topic', {durable: false});
-      await channel.assertQueue(`app_${config.rabbit.serviceName}_test.transaction`);
-      await channel.bindQueue(`app_${config.rabbit.serviceName}_test.transaction`, 'events', `${config.rabbit.serviceName}_transaction.*`);
-    } catch (e) {
-      channel = await amqpInstance.createChannel();
-    }
-
-    return await new Promise(res => {
-      channel.consume(`app_${config.rabbit.serviceName}_test.transaction`, data => {
-        amqpInstance.close();
-        res();
-      }, {noAck: true})
-    });
-  });
+  //   return await new Promise(res => {
+  //     channel.consume(`app_${config.rabbit.serviceName}_test.transaction`, data => {
+  //       amqpInstance.close();
+  //       res();
+  //     }, {noAck: true})
+  //   });
+  // });
 
 });

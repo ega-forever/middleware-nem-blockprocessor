@@ -3,24 +3,24 @@ const request = require('request-promise'),
   _ = require('lodash'),
   {URL} = require('url'),
   bunyan = require('bunyan'),
-  log = bunyan.createLogger({name: 'nemBlockprocessor.requestService'});
+  nem = require('nem-sdk').default,
+  Promise = require('bluebird'),
+  log = bunyan.createLogger({name: 'nemBlockprocessor.requestService'}),
+  endpoint = nem.model.objects.create('endpoint')(config.nis.server, nem.model.nodes.defaultPort);
 
 const blockHeight = async () => {
   const res = await get('/chain/height');
   return _.get(res, 'height');
 };
 
-const getBlock = async (blockHeight) => post('/block/at/public', {height: blockHeight});
 
-const getLast10BlocksFromHeight = async (blockHeight) => {
-  let res = await post('/local/chain/blocks-after', {height: blockHeight});
-  return _.get(res, 'data');
+const getLastBlock = async () => {
+  return await get('/chain/last-block');
 };
 
-const getIncomingTransactions = async (address) => {
-  const res = await get(`/account/transfers/incoming?address=${address}`);
-  return _.get(res, 'data');
-};
+const getBlock = async (blockHeight) => post('/block/at/public', {height: blockHeight > 1 ? blockHeight : 1});
+
+
 
 const get = query => makeRequest(query, 'GET');
 const post = (query, body) => makeRequest(query, 'POST', body);
@@ -32,16 +32,18 @@ const makeRequest = (path, method, body) => {
     uri: new URL(path, config.nis.server),
     json: true
   };
-  return request(options).catch(e => errorHandler(e));
+  return request(options).catch(async(e) => await errorHandler(e));
 };
 
-const errorHandler = err => {
+const errorHandler = async(err) => {
+  if (err.name && err.name == "StatusCodeError") {
+    await Promise.delay(10000);
+  }
   log.error(err);
 };
 
 module.exports = {
   blockHeight,
+  getLastBlock,
   getBlock,
-  getIncomingTransactions,
-  getLast10BlocksFromHeight
 };

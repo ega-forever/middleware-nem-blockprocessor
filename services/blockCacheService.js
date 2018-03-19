@@ -6,7 +6,10 @@ const config = require('../config'),
   blockModel = require('../models/blockModel'),
   nis = require('./nisRequestService'),
   nem = require('nem-sdk').default,
-  log = bunyan.createLogger({name: 'app.services.blockCacheService'});
+  Stomp = require('webstomp-client'),
+  log = bunyan.createLogger({name: 'app.services.blockCacheService'}),
+  DEFAULT_TYPE = 1,
+  STEP_BEFORE_CURRENT_HEIGHT = 2;
 
 /**
  * @service
@@ -17,156 +20,186 @@ const config = require('../config'),
 
 class BlockCacheService {
 
-  constructor (endpoint) {
-    this.endpoint = endpoint;
+  /**
+   * Creates an instance of BlockCacheService.
+   * @param {Stomp.client} client webstomp-client Client
+   * 
+   * @memberOf BlockCacheService
+  
+   * 
+   */
+  constructor (client) {
+    this.client = client;
     this.events = new EventEmitter();
-    this.currentHeight = 0;
-    this.lastBlocks = [];
+    this._currentHeight = 0;
     this.isSyncing = false;
-    this.pendingTxCallback = (err, tx) => this.UnconfirmedTxEvent(err, tx);
+    this.subscribeUnconfirmedTxId = undefined;
   }
 
+  /**
+   * 
+   * @param {blockModel} block 
+   * 
+   * @memberOf BlockCacheService
+  
+   * 
+   */
+  async _saveHashForPrevBlock(block) {
+    await blockModel.findOneAndUpdate(
+      {number: block.number-1}, 
+      {hash: _.get(block, 'prevBlockHash.data', null)}
+    );        
+  }
+
+  async _delTransactionsFromUnconfirmed(block) {
+    await blockModel.update({number: -1}, {
+      $pull: {
+        transactions: {
+          hash: {
+            $in: block.transactions.map(tx => tx.hash)
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * 
+   * function for sync blocks in database with node
+   * 
+   * @returns 
+   * 
+   * @memberOf BlockCacheService
+   */
   async startSync () {
     if (this.isSyncing)
       return;
 
-    await this.indexCollection();
+    await this._indexCollection();
     this.isSyncing = true;
 
     await blockModel.remove({number: -1});
+    const lastBlock = await blockModel.findOne({network: config.nis.network}).sort('-number');
+    this._currentHeight = _.get(lastBlock, 'number', 0);
 
-    const currentBlocks = await blockModel.find({network: config.nis.network}).sort('-number').limit(config.consensus.lastBlocksValidateAmount);
-    this.currentHeight = _.chain(currentBlocks).get('0.number', -1).add(1).value();
-    log.info(`caching from block:${this.currentHeight} for network:${config.nis.network}`);
-    this.lastBlocks = _.chain(currentBlocks).map(block => block.hash).compact().reverse().value();
-    this.doJob();
-    //this.web3.eth.filter('pending').watch(this.pendingTxCallback); todo rewrite
+    this._doJob();
+
+    this.subscribeUnconfirmedTxId = this.client.subscribe('/unconfirmed/*', 
+      (message) => this._UnconfirmedTxEvent(JSON.parse(message.body), message.headers));
 
   }
 
-  async doJob () {
+  /**
+   * 
+   * function for do sync job with database and catch errors
+   * 
+   * @memberOf BlockCacheService
+  
+   * 
+   */
+  async _doJob () {
     while (this.isSyncing) {
       try {
-        let block = await this.processBlock();
-        console.log(block)
+        let block = await this._processBlock();
         await blockModel.findOneAndUpdate({number: block.number}, block, {upsert: true});
-        await blockModel.update({number: -1}, {
-          $pull: {
-            transactions: {
-              hash: {
-                $in: block.transactions.map(tx => tx.hash)
-              }
-            }
-          }
-        });
-
-        this.currentHeight++;
-        _.pullAt(this.lastBlocks, 0);
-        this.lastBlocks.push(block.hash);
+        await this._delTransactionsFromUnconfirmed(block);        
+        await this._saveHashForPrevBlock(block);
+        this._currentHeight++;
+       
+        log.info(`caching from block:${this._currentHeight} for network:${config.nis.network}`);  
         this.events.emit('block', block);
       } catch (err) {
 
-        console.log(err)
-/*        if (_.has(err, 'cause') && err.toString() === web3Errors.InvalidConnection('on IPC').toString())
-          return process.exit(-1);*/
+        if (!_.has(err, 'code')) {
+          log.error(`unknown error on synchronization` + err.toString())
+          process.exit(-1);
+        }
 
         if (_.get(err, 'code') === 0) {
-          log.info(`await for next block ${this.currentHeight + 1}`);
+          log.info(`await for next block ${this._currentHeight + 1}`);
           await Promise.delay(10000);
         }
 
         if (_.get(err, 'code') === 1) {
-          let lastCheckpointBlock = await blockModel.findOne({hash: this.lastBlocks[0]});
-          log.info(`wrong sync state!, rollback to ${lastCheckpointBlock.number - 1} block`);
-          await blockModel.remove({hash: {$in: this.lastBlocks}});
-          const currentBlocks = await blockModel.find({network: config.nis.network}).sort('-number').limit(config.consensus.lastBlocksValidateAmount);
-          this.lastBlocks = _.chain(currentBlocks).map(block => block.hash).reverse().value();
-          this.currentHeight = lastCheckpointBlock - 1;
+            const prevBlock = await blockModel.findOne({number: this._currentHeight-1});
+            log.info(`wrong sync state!, rollback to ${prevBlock.number} block`); 
+            await blockModel.remove({number: this._currentHeight});
+            this._currentHeight--;
         }
       }
     }
   }
 
-  async UnconfirmedTxEvent (err) {
+  async _UnconfirmedTxEvent (data, headers) {
+    const lastBlock = nis.getLastBlock();
 
-    if (err)
-      return;
+    await blockModel.findOneAndUpdate(
+      {number: -1}, 
+      {$set: {hash: null, type: DEFAULT_TYPE, timestamp: 0, transactions: lastBlock.transactions}},
+      {upsert: true}
+    );
+    await this._saveHashForPrevBlock(lastBlock);
 
-    const block = await Promise.promisify(this.web3.eth.getBlock)('pending', true);
-    let currentUnconfirmedBlock = await blockModel.findOne({number: -1}) || {
-        number: -1,
-        hash: null,
-        timestamp: 0,
-        txs: []
-      };
-
-    _.merge(currentUnconfirmedBlock, {transactions: _.get(block, 'transactions', [])});
-
-    await blockModel.findOneAndUpdate({number: -1}, _.omit(currentUnconfirmedBlock, ['_id', '__v']), {upsert: true});
+    this.events.emit('unconfirmed', data.transaction, headers.destination, data.meta.hash.data);
   }
 
+  /**
+   * stop synchronization in database with node
+   * 
+   * 
+   * @memberOf BlockCacheService
+   */
   async stopSync () {
     this.isSyncing = false;
-    //this.web3.eth.filter.stopWatching(this.pendingTxCallback);
+    this.client.unsubscribe(this.subscribeUnconfirmedTxId);
   }
 
-  async processBlock () {
+  async _processBlock () {
 
-    let block = await nis.blockHeight();
+    const nodeHeight = await nis.blockHeight();
 
-    if (block === this.currentHeight) //heads are equal
+    if (nodeHeight === this._currentHeight) //heads are equal
       return Promise.reject({code: 0});
 
-/*    if (block === 0) {
-      let syncState = await Promise.promisify(this.web3.eth.getSyncing)();
-      if (syncState.currentBlock !== 0)
-        return Promise.reject({code: 0});
-    }*/
+    if (nodeHeight === 0 || isNaN(nodeHeight)) {
+      return Promise.reject({code: 0});
+    }
 
-    if (block < this.currentHeight)
+    if (nodeHeight < this._currentHeight)
       return Promise.reject({code: 1}); //head has been blown off
 
-    const lastBlocks = await nis.getLast10BlocksFromHeight(this.currentHeight - 9 < 1 ? 1 : this.currentHeight - 9);
-
-    //const lastBlockHashes = await Promise.mapSeries(this.lastBlocks, async blockHash => await Promise.promisify(this.web3.eth.getBlock)(blockHash, false));
-
-    const filtered = _.filter(lastBlocks, block=>this.lastBlocks.includes(block.hash));
-
-    if (filtered.length !== this.lastBlocks.length)
-      return Promise.reject({code: 1}); //head has been blown off
-
+    const newBlock = await nis.getBlock(this._currentHeight);
     /**
      * Get raw block
      * @type {Object}
      */
-
-    let rawBlock = _.chain(lastBlocks)
-      .find(item=>item.block.height === this.currentHeight)
-      .thru(item=>
-        _.merge(item.block, {
-          number: item.block.height,
-          hash: item.hash,
-          transactions: item.txes.map(tx=>
-            _.merge(tx, {
-              sender:  nem.model.address.toAddress(tx.signer, config.nis.network)
-            })
-          ),
-          network: config.nis.network
-        }))
-      .value();
-
-    return rawBlock;
+    return  _.merge(newBlock, {
+        number: newBlock.height,
+        network: config.nis.network,
+        transactions: newBlock.transactions.map(tx => 
+          _.merge(tx, {
+            sender:  nem.model.address.toAddress(tx.signer, config.nis.network)
+          })
+        )
+      });
   }
 
-  async indexCollection () {
+  async _indexCollection () {
     log.info('indexing...');
     await blockModel.init();
     log.info('indexation completed!');
   }
 
+  /**
+   * function for check sync blocks in database with node
+   * 
+   * @returns boolean
+   * 
+   * @memberOf BlockCacheService
+   */
   async isSynced () {
-    const height = await Promise.promisify(this.web3.eth.getBlockNumber)();
-    return this.currentHeight >= height - config.consensus.lastBlocksValidateAmount;
+    const height = await nis.blockHeight();
+    return this._currentHeight == height;
   }
 
 }

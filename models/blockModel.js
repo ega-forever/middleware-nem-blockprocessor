@@ -10,6 +10,7 @@ const mongoose = require('mongoose'),
 const Block = new mongoose.Schema({
   number: {type: Number, unique: true, index: true},
   timeStamp: {type: Number, required: true, index: true},
+  hash: {type: String, index: true},  
   type: {type: Number, required: true},
   transactions: [{
     timeStamp: {type: Number},
@@ -21,12 +22,22 @@ const Block = new mongoose.Schema({
     sender: {type: String, index: true},
     type: {type: String},
     deadline: {type: Number},
+    newPart: {type: String},
+    rentalFee: {type: String},
     message: {
       payload: {type: String},
       type: {type: Number}
     },
     mosaics: [{
       quantity: {type: Number},
+      type: {type: String},      
+      supplyType: {type: String},
+      delta: {type: String},
+      fee: {type: String},
+      deadline: {type: String},
+      version: {type: Number},
+      signature: {type: String},
+      timestamp: {type: Number},
       mosaicId: {
         namespaceId: {type: String},
         name: {type: String}
@@ -36,6 +47,10 @@ const Block = new mongoose.Schema({
     signer: {type: String},
 
   }],
+  signature: {type: String},
+  version: {type: Number},
+  signer: {type: String},
+  prevBlockHash: {data: {type: String}},  
   network: {type: String}
 });
 

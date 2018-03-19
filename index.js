@@ -37,8 +37,7 @@ const _ = require('lodash'),
 
 const init = async function () {
 
-  const blockCacheService = new BlockCacheService();
-
+await Promise.delay(6000);
   const amqpInstance = await amqp.connect(config.rabbit.url)
     .catch(() => {
       log.error('Rabbitmq process has finished!');
@@ -56,8 +55,6 @@ const init = async function () {
 
   const ws = new SockJS(`${config.nis.websocket}/w/messages`);
   const client = Stomp.over(ws, {heartbeat: true, debug: false});
-//var endpoint = nem.model.objects.create("endpoint")("http://myNode", 7890);
-
   await new Promise(res =>
     client.connect({}, res, () => {
       log.error('NIS process has finished!');
@@ -65,29 +62,36 @@ const init = async function () {
     })
   );
 
-  blockCacheService.events.on('block', async block => {
-    log.info('%s (%d) added to cache.', block.hash, block.number);
-/*    const filteredTxs = await filterTxsByAccountService(block.transactions);
+  const blockCacheService = new BlockCacheService(client);
 
+  blockCacheService.events.on('block', async (block) => {
+    log.info('block height=%d added to cache.', block.number);
+    const filteredTxs = await txsProcessService(block.transactions).catch(() => []);
     for (let tx of filteredTxs) {
-      let addresses = _.chain([tx.to, tx.from])
-        .union(tx.logs.map(log => log.address))
+      if (tx && tx.signer) {
+        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+      }
+
+      const payload = _.chain(tx)
+        .omit(['participants'])
+        .merge({unconfirmed: false})
+        .value();
+
+      const addresses = _.chain([tx.recipient, tx.sender])
         .uniq()
         .value();
 
       for (let address of addresses)
-        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(tx)));
-    }*/
+        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
+    }
   });
 
   await blockCacheService.startSync();
 
-  client.subscribe('/unconfirmed/*', async function (message) {
-    let data = JSON.parse(message.body);
+  blockCacheService.events.on('unconfirmed', async (transaction, destination, hashData) => {
+    const address = destination.replace('/unconfirmed/', '');
 
-    let address = message.headers.destination.replace('/unconfirmed/', '');
-
-    let filteredTxs = await txsProcessService([data.transaction]).catch(() => []);
+    const filteredTxs = await txsProcessService([transaction]).catch(() => []);
     for (let tx of filteredTxs) {
 
       if (tx && tx.signer) {
@@ -96,7 +100,7 @@ const init = async function () {
 
       let payload = _.chain(tx)
         .omit(['participants'])
-        .merge({unconfirmed: true, hash: data.meta.hash.data})
+        .merge({unconfirmed: true, hash: hashData})
         .value();
 
       await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
