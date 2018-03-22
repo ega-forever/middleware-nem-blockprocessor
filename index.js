@@ -65,7 +65,7 @@ await Promise.delay(6000);
   const blockCacheService = new BlockCacheService(client);
 
   blockCacheService.events.on('block', async (block) => {
-    log.info('block height=%d added to cache.', block.number);
+    //log.info('block height=%d added to cache.', block.number);
     const filteredTxs = await txsProcessService(block.transactions).catch(() => []);
     for (let tx of filteredTxs) {
       if (tx && tx.signer) {
@@ -86,9 +86,9 @@ await Promise.delay(6000);
     }
   });
 
-  await blockCacheService.startSync();
 
   blockCacheService.events.on('unconfirmed', async (transaction, destination, hashData) => {
+    console.log('get transaction');
     const address = destination.replace('/unconfirmed/', '');
 
     const filteredTxs = await txsProcessService([transaction]).catch(() => []);
@@ -107,6 +107,9 @@ await Promise.delay(6000);
 
     }
   });
+
+  blockCacheService.startSync();
+  
 
 };
 module.exports = init();
