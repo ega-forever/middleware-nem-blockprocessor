@@ -3,10 +3,8 @@ const request = require('request-promise'),
   _ = require('lodash'),
   {URL} = require('url'),
   bunyan = require('bunyan'),
-  nem = require('nem-sdk').default,
   Promise = require('bluebird'),
-  log = bunyan.createLogger({name: 'nemBlockprocessor.requestService'}),
-  endpoint = nem.model.objects.create('endpoint')(config.nis.server, nem.model.nodes.defaultPort);
+  log = bunyan.createLogger({name: 'nemBlockprocessor.requestService'});
 
 const blockHeight = async () => {
   const res = await get('/chain/height');
@@ -32,11 +30,11 @@ const makeRequest = (path, method, body) => {
     uri: new URL(path, config.nis.server),
     json: true
   };
-  return request(options).catch(async(e) => await errorHandler(e));
+  return request(options).catch(async (e) => await errorHandler(e));
 };
 
-const errorHandler = async(err) => {
-  if (err.name && err.name == "StatusCodeError") {
+const errorHandler = async (err) => {
+  if (err.name && err.name === 'StatusCodeError') {
     await Promise.delay(10000);
   }
   log.error(err);

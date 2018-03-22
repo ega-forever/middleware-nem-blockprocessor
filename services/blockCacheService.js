@@ -6,11 +6,9 @@ const config = require('../config'),
   blockModel = require('../models/blockModel'),
   nis = require('./nisRequestService'),
   nem = require('nem-sdk').default,
-  Stomp = require('webstomp-client'),
   log = bunyan.createLogger({name: 'app.services.blockCacheService'}),
   hashes = require('./hashes'),
-  DEFAULT_TYPE = 1,
-  STEP_BEFORE_CURRENT_HEIGHT = 2;
+  DEFAULT_TYPE = 1;
 
 /**
  * @service
@@ -37,30 +35,8 @@ class BlockCacheService {
     this.subscribeUnconfirmedTxId = undefined;
   }
 
-  /**
-   * 
-   * @param {blockModel} block 
-   * 
-   * @memberOf BlockCacheService
-  
-   * 
-   */
-  async _saveBlockData(block) {
-    await blockModel.findOneAndUpdate({number: block.number}, block,{upsert: true});
-  }
+ 
 
-  async _delTransactionsFromUnconfirmed(block) {
-    await blockModel.findOneAndUpdate({number: block.number}, block, {upsert: true});
-    await blockModel.update({number: -1}, {
-      $pull: {
-        transactions: {
-          hash: {
-            $in: block.transactions.map(tx => tx.hash)
-          }
-        }
-      }
-    });
-  }
 
   /**
    * 
@@ -72,20 +48,19 @@ class BlockCacheService {
    */
   async startSync () {
     if (this.isSyncing)
-      return;
+    {return;}
 
     await this._indexCollection();
     this.isSyncing = true;
-
-    await blockModel.remove({number: -1});
-    const lastBlock = await blockModel.findOne({network: config.nis.network}).sort('-number');
-    this._currentHeight = +_.get(lastBlock, 'number', 0);
-    this._lastBlockHash = _.get(lastBlock, 'hash', undefined);
-
+    await this._delUnconfirmedBlock();
+    await this._startFromLastBlock();
     this._doJob();
 
+
     this.subscribeUnconfirmedTxId = this.client.subscribe('/unconfirmed/*', 
-      (message) => this._UnconfirmedTxEvent(JSON.parse(message.body), message.headers));
+      (message) => this._UnconfirmedTxEvent(JSON.parse(message.body), message.headers)
+    );
+      
 
   }
 
@@ -101,17 +76,15 @@ class BlockCacheService {
     while (this.isSyncing) {
       try {
         let block = await this._processBlock();
-        await this._saveBlockData(block);        
+        await this._addBlockToCache(block);
         await this._delTransactionsFromUnconfirmed(block);        
-        this._currentHeight++;
-        this._lastBlockHash = block.hash;
        
-        //log.info(`caching from block:${this._currentHeight}  for network:${config.nis.network}`);  
+        log.info(`caching from block:${this._currentHeight}  for network:${config.nis.network}`);  
         this.events.emit('block', block);
       } catch (err) {
 
         if (!_.has(err, 'code')) {
-          log.error(`unknown error on synchronization` + err.toString())
+          log.error('unknown error on synchronization' + err.toString());
           process.exit(-1);
         }
 
@@ -121,19 +94,17 @@ class BlockCacheService {
         }
 
         if (_.get(err, 'code') === 1) {
-            const prevBlock = await blockModel.findOne({number: this._currentHeight-1});
-            log.info(`wrong sync state!, rollback to ${prevBlock.number} block`); 
-            await blockModel.remove({number: this._currentHeight});
-
-            this._currentHeight--;
-            this._lastBlockHash = prevBlock.hash;
+          this._delLastBlock();
+          this._moveToPrevBlock();
+          log.info(`wrong sync state!, rollback to ${this._currentHeight} block`); 
         }
       }
     }
   }
 
+
+
   async _UnconfirmedTxEvent (data, headers) {
-    console.log('get transactionAAAA');
     const lastBlock = nis.getLastBlock();
 
     await blockModel.findOneAndUpdate(
@@ -155,46 +126,36 @@ class BlockCacheService {
     this.client.unsubscribe(this.subscribeUnconfirmedTxId);
   }
 
-  _isHashEquals (newBlock) {
-    return (
-      this._lastBlockHash === undefined ||
-      (newBlock.prevBlockHash.data == this._lastBlockHash)
-    );
-  }
-
+  /**
+   * 
+   * 
+   * @returns {Object} block [data for blockModel]
+   * 
+   * @memberOf BlockCacheService
+   */
   async _processBlock () {
 
     const nodeHeight = await nis.blockHeight();
 
     if (nodeHeight === this._currentHeight) //heads are equal
-      return Promise.reject({code: 0});
+    {return Promise.reject({code: 0});}
 
     if (nodeHeight === 0 || isNaN(nodeHeight)) {
       return Promise.reject({code: 0});
     }
 
     if (nodeHeight < this._currentHeight)
-      return Promise.reject({code: 1}); //head has been blown off
+    {return Promise.reject({code: 1});} //head has been blown off
 
     const newBlock = await nis.getBlock(this._currentHeight+1);
-    if (!this._isHashEquals(newBlock)) {
-      console.log(newBlock, this._lastBlockHash);
+    if (!this._isHashEqualsWithLastBlock(newBlock.prevBlockHash.data)) {
       return Promise.reject({code: 1});
     }
     /**
      * Get raw block
      * @type {Object}
      */
-    return  _.merge(newBlock, {
-        number: newBlock.height,
-        hash: hashes.calculateBlockHash(newBlock),
-        network: config.nis.network,
-        transactions: newBlock.transactions.map(tx => 
-          _.merge(tx, {
-            sender:  nem.model.address.toAddress(tx.signer, config.nis.network)
-          })
-        )
-      });
+    return  this._compileBlockFromData(newBlock);
   }
 
   async _indexCollection () {
@@ -212,7 +173,92 @@ class BlockCacheService {
    */
   async isSynced () {
     const height = await nis.blockHeight();
-    return this._currentHeight == height;
+    return this._currentHeight === +height;
+  }
+
+  /**
+   * 
+   * @param {blockModel} block 
+   * 
+   * save Block to database
+   * 
+   * @memberOf BlockCacheService
+   * 
+   */
+  async _saveBlockData (block) {
+    await blockModel.findOneAndUpdate({number: block.number}, block,{upsert: true});
+  }
+
+  /**
+   * 
+   * del transactions from unconfirmed block to currrent block
+   * 
+   * @param {blockModel} block 
+   * 
+   * @memberOf BlockCacheService
+   * 
+   */
+  async _delTransactionsFromUnconfirmed (block) {
+    await blockModel.update({number: -1}, {
+      $pull: {
+        transactions: {
+          hash: {
+            $in: block.transactions.map(tx => tx.hash)
+          }
+        }
+      }
+    });
+  }
+
+  async _delUnconfirmedBlock () {
+    await blockModel.remove({number: -1});
+  }
+
+  async _startFromLastBlock () {
+    const lastBlock = await blockModel.findOne({network: config.nis.network}).sort('-number');
+    this._currentHeight = +_.get(lastBlock, 'number', 0);
+    this._lastBlockHash = _.get(lastBlock, 'hash', undefined);
+  }
+
+  /**
+   * 
+   * @param {Object} block [data for blockModel] 
+   * 
+   * @memberOf BlockCacheService
+  
+   * 
+   */
+  async _addBlockToCache (block) {
+    await this._saveBlockData(block);     
+    this._currentHeight++;
+    this._lastBlockHash = block.hash;  
+  }
+
+  async _delLastBlock () {
+    await blockModel.remove({number: this._currentHeight});
+  }
+
+  async _moveToPrevBlock () {
+    this._currentHeight--;    
+    const prevBlock = await blockModel.findOne({number: this._currentHeight});
+    this._lastBlockHash = prevBlock.hash;
+  }
+
+  _isHashEqualsWithLastBlock (hash) {
+    return (this._lastBlockHash === undefined || (hash === this._lastBlockHash));
+  }
+
+  _compileBlockFromData (blockData) {
+    return _.merge(blockData, {
+      number: blockData.height,
+      hash: hashes.calculateBlockHash(blockData),
+      network: config.nis.network,
+      transactions: blockData.transactions.map(tx => 
+        _.merge(tx, {
+          sender:  nem.model.address.toAddress(tx.signer, config.nis.network)
+        })
+      )
+    });
   }
 
 }

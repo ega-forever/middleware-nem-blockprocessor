@@ -18,15 +18,12 @@ mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 const _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
-  blockModel = require('./models/blockModel'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
   nem = require('nem-sdk').default,
   BlockCacheService = require('./services/blockCacheService'),
-  nis = require('./services/nisRequestService'),
-  txsProcessService = require('./services/txsProcessService'),
-  blockProcessService = require('./services/blockProcessService');
+  txsProcessService = require('./services/txsProcessService');
 
 [mongoose.accounts, mongoose.connection].forEach(connection =>
   connection.on('disconnected', function () {
@@ -37,7 +34,6 @@ const _ = require('lodash'),
 
 const init = async function () {
 
-await Promise.delay(6000);
   const amqpInstance = await amqp.connect(config.rabbit.url)
     .catch(() => {
       log.error('Rabbitmq process has finished!');
@@ -65,7 +61,7 @@ await Promise.delay(6000);
   const blockCacheService = new BlockCacheService(client);
 
   blockCacheService.events.on('block', async (block) => {
-    //log.info('block height=%d added to cache.', block.number);
+    log.info('block height=%d added to cache.', block.number);
     const filteredTxs = await txsProcessService(block.transactions).catch(() => []);
     for (let tx of filteredTxs) {
       if (tx && tx.signer) {
@@ -82,13 +78,12 @@ await Promise.delay(6000);
         .value();
 
       for (let address of addresses)
-        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
+      {await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));}
     }
   });
 
 
   blockCacheService.events.on('unconfirmed', async (transaction, destination, hashData) => {
-    console.log('get transaction');
     const address = destination.replace('/unconfirmed/', '');
 
     const filteredTxs = await txsProcessService([transaction]).catch(() => []);
