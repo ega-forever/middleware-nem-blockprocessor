@@ -61,15 +61,25 @@ const serializeEmptyString = () => {
   return emptyBuffer;
 };
 
+const serializeChars = (string) => {
+  const bb = new ByteBuffer(0, ByteBuffer.LITTLE_ENDIAN);
+  bb.writeString(string);
+  bb.flip();
+
+  return bb;
+};
+
 const serializeString = (string) => {
   if (string == null) {
     return serializeEmptyString();   
   }
 
   const bb = new ByteBuffer(0, ByteBuffer.LITTLE_ENDIAN);
-  bb.writeUint32(string.length);
-  bb.writeString(string);
+  const charsBb = serializeChars(string);
+  bb.writeUint32(charsBb.limit);
+  bb.append(charsBb);
   bb.flip();
+  
   return bb;
 };
 
