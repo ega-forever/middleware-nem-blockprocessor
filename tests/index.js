@@ -10,16 +10,13 @@ const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   connectToQueue = require('./helpers/connectToQueue'),
   clearQueues = require('./helpers/clearQueues'),
   consumeMessages = require('./helpers/consumeMessages'),
-  awaitLastBlock = require('./helpers/awaitLastBlock'),
   createTransaction = require('./helpers/createTransaction'),
   consumeStompMessages = require('./helpers/consumeStompMessages'),
   blockModel = require('../models/blockModel'),
-  net = require('net'),
+  accountModel = require('../models/accountModel'),
   WebSocket = require('ws'),
-  nis = require('../services/nisRequestService'),
   expect = require('chai').expect,
   amqp = require('amqplib'),
-  nem = require('nem-sdk').default,
   
   Stomp = require('webstomp-client');
 
@@ -30,32 +27,38 @@ describe('core/block processor', function () {
 
   before(async () => {
     await saveAccountForAddress(accounts[0]);
-
     amqpInstance = await amqp.connect(config.rabbit.url);
-    
-    await clearQueues(amqpInstance);
+    return await clearQueues(amqpInstance);
   });
 
-  after(async () => {
-    return mongoose.disconnect();
+  after(() => {
+    mongoose.disconnect();
   });
 
   afterEach(async () => {
-    await clearQueues(amqpInstance);
+    return await clearQueues(amqpInstance);
   })
 
-   it('check for blockHashing -- just drop database and check that get block', async () => {
-     await blockModel.remove({});
-     await Promise.delay(10000);
+   it('check for blockHashing -- just drop database and check that get new block', async () => {
+     await blockModel.remove();
+     await Promise.delay(5000);
      const block = await blockModel.findOne({network: config.nis.network}).sort('-number');
      expect(block.number).to.be.greaterThan(0);
    });
+
+    it('check for rollback blockHashing -- just write in db wrong blocks and check t', async () => {
+      await blockModel.remove();
+      const block = {timeStamp: 1, type: 257, hash: 'sdfsdfsdf'};
+      await blockModel.findOneAndUpdate({number: 2}, block,{upsert: true});
+      await Promise.delay(5000);
+      const blockAfter = await blockModel.findOne({network: config.nis.network}).sort('-number');
+      expect(blockAfter.number).to.be.greaterThan(1);
+    });
 
   it('send some nem from account0 to account1 and validate countMessages(2) and structure message', async () => {
 
 
     const checkMessage = function (content) {
-      console.log(content);      
       expect(content).to.contain.all.keys(
         'amount',
         'timeStamp',
@@ -76,7 +79,7 @@ describe('core/block processor', function () {
 
     return await Promise.all([
       (async() => {
-        let tx =await createTransaction(accounts[0], 0.000001);
+        const tx =await createTransaction(accounts[0], 0.000001);
         if (tx.code == 5) {
           throw new Error('Account has not balance');
         }
@@ -94,10 +97,15 @@ describe('core/block processor', function () {
         });
       })(),
        (async () => {
-         const ws = new WebSocket('ws://localhost:5672/ws');
+         const ws = new WebSocket('ws://localhost:15674/ws');
          const client = Stomp.over(ws, {heartbeat: false, debug: false});
          return await consumeStompMessages(1, client, (message) => {
-           checkMessage(JSON.parse(message.body));
+            const body = JSON.parse(message.body);
+            if (body.recipient === accounts[0]) {
+                checkMessage(body);
+                return true;
+            }
+            return false;
          });
        })()
     ]);
@@ -110,11 +118,10 @@ describe('core/block processor', function () {
     if (tx.code == 5) {
         throw new Error('Account has not balance');
     }
-    Promise.delay(1000, async() => {
-      const channel = await amqpInstance.createChannel();  
-      const queue =await connectToQueue(channel); 
-      expect(queue.messageCount).to.equal(0);
-    });
+    await Promise.delay(1000);
+    const channel = await amqpInstance.createChannel();  
+    const queue =await connectToQueue(channel); 
+    expect(queue.messageCount).to.equal(0);
    });
 
 });

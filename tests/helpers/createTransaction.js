@@ -22,6 +22,5 @@ module.exports = async (accountTo, sum) => {
 
     // Serialize transfer transaction and announce
     const ll = await nem.model.transactions.send(common, transactionEntity, endpoint);
-    console.log(transactionEntity);
     return ll;
 };

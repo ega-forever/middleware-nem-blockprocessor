@@ -77,8 +77,9 @@ const init = async function () {
         .uniq()
         .value();
 
-      for (let address of addresses)
-      {await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));}
+      for (let address of addresses) {
+        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
+      }
     }
   });
 

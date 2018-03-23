@@ -17,7 +17,8 @@ const getLastBlock = async () => {
 };
 
 const getBlock = async (blockHeight) => post('/block/at/public', {height: blockHeight > 1 ? blockHeight : 1});
-
+const getAccount = async (address) => await get(`/account/get?address=${address}`);
+const getUnconfirmedTransactions = async (address) => await get(`/account/unconfirmedTransactions?address=${address}`);
 
 
 const get = query => makeRequest(query, 'GET');
@@ -43,5 +44,7 @@ const errorHandler = async (err) => {
 module.exports = {
   blockHeight,
   getLastBlock,
+  getAccount,
+  getUnconfirmedTransactions,
   getBlock,
 };
