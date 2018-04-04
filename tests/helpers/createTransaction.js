@@ -4,7 +4,7 @@ const config = require('../config'),
 
 module.exports = async (accountTo, sum) => {
     // Create an NIS endpoint object
-    const servArr = config.nis.server.split(/:/);
+    const servArr = config.node.server.split(/:/);
     const endpoint = nem.model.objects.create("endpoint")(
         servArr[0] + ':' + servArr[1], servArr[2]
        );
@@ -17,7 +17,7 @@ module.exports = async (accountTo, sum) => {
     const transactionEntity = nem.model.transactions.prepare("transferTransaction")(
         common, 
         transferTransaction, 
-        config.nis.network
+        config.node.network
     );
 
     // Serialize transfer transaction and announce

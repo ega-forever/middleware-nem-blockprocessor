@@ -1,4 +1,4 @@
-const config = require('../tests/config'),
+const config = require('../config'),
   bunyan = require('bunyan'),
   _ = require('lodash'),
   Promise = require('bluebird'),

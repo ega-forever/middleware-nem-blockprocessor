@@ -1,6 +1,6 @@
 const hashes = require('../services/hashes'),
     _ = require('lodash'),
-    nis = require("../services/nisRequestService"),
+    requests = require('../services/nodeRequests'),
     expect = require('chai').expect,
     Promise = require('bluebird');
 
@@ -82,8 +82,8 @@ describe('core/block processor', function () {
 
         const blockIds = _.reduce(exampleBlocks, (result, block) => _.merge(result, block), []);
         await Promise.map(blockIds, async(blockId) => {
-            const block = await nis.getBlock(blockId);
-            const blockCompare = await nis.getBlock(blockId+1);
+            const block = await requests.getBlockByNumber(blockId);
+            const blockCompare = await requests.getBlockByNumber(blockId+1);
             expect(hashes.calculateBlockHash(block)).to.be.equal(blockCompare.prevBlockHash.data);
         });
     });

@@ -15,6 +15,7 @@ const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   blockModel = require('../models/blockModel'),
   accountModel = require('../models/accountModel'),
   WebSocket = require('ws'),
+  hashes = require('../services/hashes'),
   expect = require('chai').expect,
   amqp = require('amqplib'),
   
@@ -44,7 +45,7 @@ describe('core/block processor', function () {
   it('check for blockHashing -- just drop database and check that get new block', async () => {
     await blockModel.remove();
     await Promise.delay(5000);
-    const block = await blockModel.findOne({network: config.nis.network}).sort('-number');
+    const block = await blockModel.findOne({network: config.node.network}).sort('-number');
     expect(block.number).to.be.greaterThan(0);
   });
 
@@ -53,7 +54,7 @@ describe('core/block processor', function () {
     const block = {timeStamp: 1, type: 257, hash: 'sdfsdfsdf'};
     await blockModel.findOneAndUpdate({number: 2}, block,{upsert: true});
     await Promise.delay(5000);
-    const blockAfter = await blockModel.findOne({network: config.nis.network}).sort('-number');
+    const blockAfter = await blockModel.findOne({network: config.node.network}).sort('-number');
     expect(blockAfter.number).to.be.greaterThan(1);
   });
 
@@ -72,7 +73,6 @@ describe('core/block processor', function () {
         'message',
         'version',
         'signer',
-        'sender',
         'unconfirmed'
       );
       expect(content.recipient).to.be.equal(accounts[0]);

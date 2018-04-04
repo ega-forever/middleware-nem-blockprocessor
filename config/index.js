@@ -11,7 +11,10 @@ const config = {
       collectionPrefix: process.env.MONGO_DATA_COLLECTION_PREFIX || process.env.MONGO_COLLECTION_PREFIX || 'nem'
     }
   },
-  nis: {
+  sync: {
+    shadow: parseInt(process.env.SYNC_SHADOW) || true
+  },
+  node: {
     server: process.env.NIS || 'http://bigalice2.nem.ninja:7890',
     network: parseInt(process.env.NETWORK) || -104,
     networkName: process.env.NETWORK_NAME || 'testnet',

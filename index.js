@@ -21,9 +21,15 @@ const _ = require('lodash'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
-  nem = require('nem-sdk').default,
-  BlockCacheService = require('./services/blockCacheService'),
-  txsProcessService = require('./services/txsProcessService');
+
+  NodeListenerService = require('./services/nodeListenerService'),  
+  blockRepo = require('./services/blockRepository'),
+  requests = require('./services/nodeRequests'),
+
+
+  BlockWatchingService = require('./services/blockWatchingService'),
+  SyncCacheService = require('./services/syncCacheService'),
+  filterTxsByAccountsService = require('./services/filterTxsByAccountsService');
 
 [mongoose.accounts, mongoose.connection].forEach(connection =>
   connection.on('disconnected', function () {
@@ -32,79 +38,90 @@ const _ = require('lodash'),
   })
 );
 
+const ws = new SockJS(`${config.node.websocket}/w/messages`);
+const client = Stomp.over(ws, {heartbeat: true, debug: false});
+
 const init = async function () {
 
-  const amqpInstance = await amqp.connect(config.rabbit.url)
+  let amqpConn = await amqp.connect(config.rabbit.url)
     .catch(() => {
-      log.error('Rabbitmq process has finished!');
+      log.error('rabbitmq is not available!');
       process.exit(0);
     });
 
-  let channel = await amqpInstance.createChannel();
+  let channel = await amqpConn.createChannel();
 
   channel.on('close', () => {
-    log.error('Rabbitmq process has finished!');
+    log.error('rabbitmq process has finished!');
     process.exit(0);
   });
 
-  await channel.assertExchange('events', 'topic', {durable: false});
+  try {
+    await channel.assertExchange('events', 'topic', {durable: false});
+  } catch (e) {
+    log.error(e);
+    channel = await amqpConn.createChannel();
+  }
 
-  const ws = new SockJS(`${config.nis.websocket}/w/messages`);
-  const client = Stomp.over(ws, {heartbeat: true, debug: false});
   await new Promise(res =>
     client.connect({}, res, () => {
       log.error('NIS process has finished!');
       process.exit(0);
     })
   );
-
-  const blockCacheService = new BlockCacheService(client);
-
-  blockCacheService.events.on('block', async (block) => {
-    log.info('block height=%d added to cache.', block.number);
-    const filteredTxs = await txsProcessService(block.transactions).catch(() => []);
-    for (let tx of filteredTxs) {
-      if (tx && tx.signer) {
-        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
-      }
-
-      const payload = _.chain(tx)
-        .omit(['participants'])
-        .merge({unconfirmed: false})
-        .value();
-
-      const addresses = _.chain([tx.recipient, tx.sender])
-        .uniq()
-        .value();
-
-      for (let address of addresses) {
-        await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-      }
-    }
+  const listener = new NodeListenerService(client);
+  const syncCacheService = new SyncCacheService(requests, blockRepo);
+  syncCacheService.events.on('block', async block => {
+    log.info(`${block.hash} (${block.number}) added to cache.`);
+    let filtered = await filterTxsByAccountsService(block.transactions).catch(log.error);
+    await Promise.all(filtered.map(item =>
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item, {block: block.number, unconfirmed: false}))))
+    ));
   });
 
 
-  blockCacheService.events.on('unconfirmed', async (transaction, destination, hashData) => {
-    const address = destination.replace('/unconfirmed/', '');
-
-    const filteredTxs = await txsProcessService([transaction]).catch(() => []);
-    for (let tx of filteredTxs) {
-
-      if (tx && tx.signer) {
-        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
+  let endBlock = await syncCacheService.start()
+    .catch((err) => {
+      if (_.get(err, 'code') === 0) {
+        log.info('nodes are down or not synced!');
+        process.exit(0);
       }
+      log.error(err);
+    });
 
-      let payload = _.chain(tx)
-        .omit(['participants'])
-        .merge({unconfirmed: true, hash: hashData})
-        .value();
-
-      await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-
+  await new Promise((res) => {
+    if (config.sync.shadow) {
+      return res();
     }
+
+    syncCacheService.events.on('end', () => {
+      log.info(`cached the whole blockchain up to block: ${endBlock}`);
+      res();
+    });
   });
 
-  blockCacheService.startSync();
+
+  const blockWatchingService = new BlockWatchingService(requests, listener, blockRepo, endBlock);
+
+  await blockWatchingService.startSync().catch(e => {
+    log.error(`error starting cache service: ${e}`);
+    process.exit(0);
+  });
+
+  blockWatchingService.events.on('block', async block => {
+    log.info(`${block.hash} (${block.number}) added to cache.`);
+    let filtered = await filterTxsByAccountsService(block.transactions);
+    await Promise.all(filtered.map(item =>
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item, {block: block.number, unconfirmed: false}))))
+    ));
+  });
+
+  blockWatchingService.events.on('tx', async (tx) => {
+    let filtered = await filterTxsByAccountsService([tx]);
+    await Promise.all(filtered.map(item =>
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item, {block: -1, unconfirmed: true}))))
+    ));
+  });
   
 
 };
