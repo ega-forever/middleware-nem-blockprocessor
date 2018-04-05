@@ -5,7 +5,7 @@ const request = require('request-promise'),
   bunyan = require('bunyan'),
   Promise = require('bluebird'),
   hashes = require('./hashes'),
-  log = bunyan.createLogger({name: 'wavesBlockprocessor.nodeSenderService'});
+  log = bunyan.createLogger({name: 'app.services.nodeRequests'});
 
 
 const get = query => makeRequest(query, 'GET');
