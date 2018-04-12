@@ -5,11 +5,13 @@
 
 const _ = require('lodash'),
   utils = require('../utils'),
-  accountModel = require('../models/accountModel'),
-  Promise = require('bluebird');
+  config = require('../config'),
+  nem = require('nem-sdk').default,
+  accountModel = require('../models/accountModel');
 
 module.exports = async (txs) => {
-
+  if (txs.length === 0)
+  {return [];}
   /**
    * Search for tx's address occurence in DB
    * @type {string}
@@ -28,17 +30,17 @@ module.exports = async (txs) => {
   };
 
   const accounts = await accountModel.find(query);
-  const nemAccounts = _.map(accounts, a => a.address);
-
+  const nemAccounts = _.map(accounts, a => a.address);  
   if (_.isEmpty(nemAccounts)) {
-    return Promise.reject({code: 2});
+    return [];
   }
+  
 
   /**
    * Filtering for customer's transactions
    * @type {Array}
    */
-  return _.chain(txs)
+  const filtered =  _.chain(txs)
     .filter((tx, idx) => {
       if (tx.type !== 257) return false;
       let elems = _.intersection(
@@ -49,4 +51,23 @@ module.exports = async (txs) => {
       return !!elems.length;
     })
     .value();
+
+
+  return _.chain(filtered).map(tx=> {
+
+
+    const addresses = [tx.recipient];
+    if (tx.signer) {
+      tx.sender = nem.model.address.toAddress(tx.signer, config.node.network);
+      addresses.push(tx.sender);
+    } 
+
+    const payload = _.chain(tx)
+      .omit(['participants'])
+      .value();
+
+    return _.chain(addresses).uniq().map(addr => {
+      return _.merge(payload, {'address': addr});
+    }).value();
+  }).flattenDeep().value();
 };
