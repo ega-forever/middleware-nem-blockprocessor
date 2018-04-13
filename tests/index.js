@@ -1,3 +1,8 @@
+/**
+ * Copyright 2017–2018, LaborX PTY
+ * Licensed under the AGPL Version 3 license.
+ * @author Kirill Sergeev <cloudkserg11@gmail.com>
+ */
 const mongoose = require('mongoose'),
   Promise = require('bluebird'),
   config = require('./config');
@@ -15,13 +20,12 @@ const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   blockModel = require('../models/blockModel'),
   accountModel = require('../models/accountModel'),
   WebSocket = require('ws'),
-  hashes = require('../services/hashes'),
   expect = require('chai').expect,
   amqp = require('amqplib'),
   
   Stomp = require('webstomp-client');
 
-let amqpInstance, blockHeight,  accounts = config.dev.accounts;
+let amqpInstance,  accounts = config.dev.accounts;
 
 describe('core/block processor', function () {
 
@@ -32,14 +36,14 @@ describe('core/block processor', function () {
     await clearQueues(amqpInstance);
   });
 
-  after(async() => {
+  after(async () => {
     await amqpInstance.close();
     await mongoose.disconnect();
   });
 
   afterEach(async () => {
     await clearQueues(amqpInstance);
-  })
+  });
 
 
   it('check for blockHashing -- just drop database and check that get new block', async () => {
@@ -49,14 +53,7 @@ describe('core/block processor', function () {
     expect(block.number).to.be.greaterThan(0);
   });
 
-  it('check for rollback blockHashing -- just write in db wrong blocks and check t', async () => {
-    await blockModel.remove();
-    const block = {timeStamp: 1, type: 257, hash: 'sdfsdfsdf'};
-    await blockModel.findOneAndUpdate({number: 2}, block,{upsert: true});
-    await Promise.delay(5000);
-    const blockAfter = await blockModel.findOne({network: config.node.network}).sort('-number');
-    expect(blockAfter.number).to.be.greaterThan(1);
-  });
+
 
   it('send some nem from account0 to account1 and validate countMessages(2) and structure message', async () => {
 
@@ -80,9 +77,9 @@ describe('core/block processor', function () {
     };
 
     return await Promise.all([
-      (async() => {
+      (async () => {
         const tx =await createTransaction(accounts[0], 0.000001);
-        if (tx.code == 5) {
+        if (tx.code === 5) {
           throw new Error('Account has not balance');
         }
       })(),
@@ -92,9 +89,10 @@ describe('core/block processor', function () {
         return await consumeMessages(1, channel, (message) => {
           const content = JSON.parse(message.content);
           if (content.recipient === accounts[0]) {
-              checkMessage(content);
-              return true;
+            checkMessage(content);
+            return true;
           }
+          channel.ack(message);                    
           return false;
         });
       })(),
@@ -104,8 +102,8 @@ describe('core/block processor', function () {
         await consumeStompMessages(1, client, (message) => {
           const body = JSON.parse(message.body);
           if (body.recipient === accounts[0]) {
-              checkMessage(body);
-              return true;
+            checkMessage(body);
+            return true;
           }
           return false;
         });
@@ -115,16 +113,25 @@ describe('core/block processor', function () {
   });
 
   it('delete accounts and send transfer transaction and after delay 0 messages', async () => {
-
     await accountModel.remove();
     let tx =await createTransaction(accounts[0], 0.000001);
-    if (tx.code == 5) {
-        throw new Error('Account has not balance');
+    if (tx.code === 5) {
+      throw new Error('Account has not balance');
     }
     await Promise.delay(1000);
     const channel = await amqpInstance.createChannel();  
     const queue =await connectToQueue(channel); 
     expect(queue.messageCount).to.equal(0);
+  });
+
+
+  it('check for rollback blockHashing -- just write in db wrong blocks and check t', async () => {
+    await blockModel.remove();
+    const block = {timeStamp: 1, type: 257, hash: 'sdfsdfsdf'};
+    await blockModel.findOneAndUpdate({number: 2}, block,{upsert: true});
+    await Promise.delay(15000);
+    const blockAfter = await blockModel.findOne({network: config.node.network}).sort('-number');
+    expect(blockAfter.number).to.be.greaterThan(1);
   });
 
 });

@@ -20,8 +20,8 @@ install:
   - npm install -g pm2
 
 before_script:
-    - echo NIS=http://bigalice2.nem.ninja:7890 > .env
-    - echo WEBSOCKET_NIS=http://bigalice2.nem.ninja:7778 >> .env
+    - echo NIS=http://192.3.61.243:7890 > .env
+    - echo WEBSOCKET_NIS=http://192.3.61.243:7778 >> .env
     - sleep 30 && pm2 start index.js
 
 script:
