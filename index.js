@@ -4,6 +4,10 @@
  * @requires config
  * @requires models/blockModel
  * @requires services/blockProcessService
+ * 
+ * Copyright 2017–2018, LaborX PTY
+ * Licensed under the AGPL Version 3 license.
+ * @author Kirill Sergeev <cloudkserg11@gmail.com>
  */
 
 
@@ -40,7 +44,6 @@ const _ = require('lodash'),
 
 const ws = new SockJS(`${config.node.websocket}/w/messages`);
 const client = Stomp.over(ws, {heartbeat: true, debug: false});
-
 const init = async function () {
 
   let amqpConn = await amqp.connect(config.rabbit.url)
@@ -63,12 +66,14 @@ const init = async function () {
     channel = await amqpConn.createChannel();
   }
 
-  await new Promise(res =>
-    client.connect({}, res, () => {
-      log.error('NIS process has finished!');
-      process.exit(0);
-    })
-  );
+  try {
+    await new Promise((res,rej) => client.connect({}, res, rej)).timeout(10000);
+  } catch(e) {
+    log.error('NIS process has finished!');
+    log.error(e);
+    process.exit(0);
+  }
+  
   const listener = new NodeListenerService(client);
   const syncCacheService = new SyncCacheService(requests, blockRepo);
   syncCacheService.events.on('block', async block => {
