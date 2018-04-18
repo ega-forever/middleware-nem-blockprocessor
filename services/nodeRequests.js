@@ -36,15 +36,15 @@ const postWithoutError = (path, body) => {
 
 
 const errorHandler = async (err) => {
-  if (err.name && err.name === 'StatusCodeError') {
+  if (err.name && err.name === 'StatusCodeError') 
     await Promise.delay(10000);
-  }
+  
   log.error(err);
 };
 
 const createBlock = (block) => {
   if (!block.height) 
-  {return {};}
+    return {};
   return _.merge(block, {
     hash: hashes.calculateBlockHash(block),
     number: Number(block.height)
@@ -70,7 +70,8 @@ const getBlockByNumber = async (height) => {
     height: (height > 1 ? height : 1)
   }).catch(() => {});
   if (!block.height) 
-  {return {};}
+    return {};
+  
   
   return createBlock(block); 
 };

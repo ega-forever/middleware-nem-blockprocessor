@@ -10,6 +10,7 @@ const config = require('../config'),
   hashes = require('./hashes'),
 
   blockModel = require('../models/blockModel'),
+  txModel = require('../models/txModel'),
   bunyan = require('bunyan'),
   log = bunyan.createLogger({name: 'app.services.blockRepository'});
 
@@ -18,7 +19,6 @@ const config = require('../config'),
  */
 const findLastBlocks = async () => {
   return await blockModel.find({
-    network: config.node.network,
     timestamp: {
       $ne: 0
     }
@@ -27,19 +27,6 @@ const findLastBlocks = async () => {
   }).limit(config.consensus.lastBlocksValidateAmount);
 };
 
-/**
- * @return {Promise return blockModel}
- */
-const findUnconfirmedBlock = async () => {
-  return await blockModel.findOne({
-    number: -1
-  }) || new blockModel({
-    number: -1,
-    hash: null,
-    timestamp: 0,
-    transactions: []
-  });
-};
 
 /**
  * @param {Array of String} hashes
@@ -47,7 +34,7 @@ const findUnconfirmedBlock = async () => {
  */
 const findBlocksByHashes = async (hashes) => {
   if (hashes.length === 0) 
-  {return [];}
+    return [];
   const blocks = await blockModel.find({
     hash: {
       $in: hashes
@@ -61,23 +48,23 @@ const findBlocksByHashes = async (hashes) => {
 /**
  * @return {Promise}
  */
-const removeUnconfirmedBlock = async () => {
-  return await blockModel.remove({
-    number: -1
+const removeUnconfirmedTxs = async () => {
+  await txModel.remove({
+    blockNumber: -1
   });
 };
 
 /**
  * 
  * @param {blockModel} block 
- * @return {Promise}
+ * @return {Promise return [{Object} of tx]}
  */
-const saveUnconfirmedBlock = async (block) => {
-  return await blockModel.findOneAndUpdate({
-    number: -1
-  }, _.omit(block.toObject(), '_id', '__v'), {
-    upsert: true
-  });
+const saveUnconfirmedTxs = async (inputTxs) => {
+  const txs = await createTransactions(inputTxs, -1);
+
+  await txModel.insertMany(txs).catch(log.error.bind(log));
+
+  return txs;
 };
 
 
@@ -89,16 +76,9 @@ const saveUnconfirmedBlock = async (block) => {
  */
 const createBlock = (block) => {
   return _.merge(block, {
-    network: config.node.network,
     number: block.height,
     hash: hashes.calculateBlockHash(block),
-    timestamp: block.time || Date.now(),
-    
-    transactions: block.transactions.map(tx => 
-      _.merge(tx, {
-        sender:  nem.model.address.toAddress(tx.signer, config.node.network)
-      })
-    )
+    timestamp: block.time || Date.now()
   });
 };
 
@@ -106,33 +86,56 @@ const createBlock = (block) => {
  * @return {Promise}
  */
 const initModels = async () => {
-  await blockModel.init();  
+  await blockModel.init();
+  await txModel.init();
 };
+
+
 
 /**
  * 
  * @param {Array of blockModel.transaction} txs 
  * @return {Promise return Array of blockModel.transaction}
  */
-const createTransactions = async (txs) => {
-  return txs;
+const createTransactions = async (txs, blockNumber) => {
+
+  const getSender = (tx) => {
+    if (tx.sender === undefined && tx.signer !== undefined)
+      return nem.model.address.toAddress(tx.signer, config.node.network);
+    return tx.sender;
+  };
+  
+
+
+  return _.map(txs, tx => {
+    const sender = getSender(tx);
+    
+    return _.merge(tx, {
+      sender: sender,
+      blockNumber,
+      hash: tx.signature,
+    });
+  });
 };
+
+
+
 
 /**
  * @param {blockModel} block
  * @param {function return Promise} afterSave
- * @return {Promise}
+ * @return {Promise return Object {block merge with transactions}}
  * 
  **/
-const saveBlock = async (block, afterSave = () => {}) => {
-  if (block.txs) 
-  {block.txs = await createTransactions(block.txs);}
+const saveBlock = async (block, txs, afterSave = () => {}) => {
   block = createBlock(block);
 
-  return new Promise(async (res) => {
+  await new Promise(async (res) => {
     sem.take(async () => {
       try {
-        await updateDbStateWithBlock(block);
+        txs = await createTransactions(txs, block.height);
+        await insertTransactions(txs);
+        await insertBlock(block);
         await afterSave(null);
       } catch (e) {
         await afterSave(e, null);
@@ -140,6 +143,10 @@ const saveBlock = async (block, afterSave = () => {}) => {
       sem.leave();
       res();
     });
+  });
+
+  return _.merge(block, {
+    transactions: txs
   });
 };
 
@@ -150,33 +157,37 @@ const saveBlock = async (block, afterSave = () => {}) => {
  * @return {Promise}
  */
 const removeBlocksForNumbers = async (startNumber, limit) => {
-  await blockModel.remove({
-    $or: [
-      {hash: {$lte: startNumber, $gte: startNumber - limit}},
-      {number: {$gte: startNumber}}
-    ]
-  }).catch(log.error);
+  await blockModel.remove({number: {$gte:  startNumber - limit}}).catch(log.error);
 };
 
-const updateDbStateWithBlock = async (block) => {
-  await blockModel.findOneAndUpdate({number: block.number}, block, {upsert: true});
+/**
+ * 
+ * @param {Number} startNumber 
+ * @return {Promise}
+ */
+const removeTxsForNumbers = async (startNumber, limit) => {
+  await txModel.remove({blockNumber: {$gte:  startNumber - limit}}).catch(log.error);
+};
 
-  await blockModel.update({number: -1}, {
-    $pull: {
-      transactions: {
-        hash: {
-          $in: block.transactions.map(tx => tx.hash)
-        }
-      }
-    }
-  }).catch(log.error);
+const insertBlock = async (block) => {
+  await blockModel.findOneAndUpdate({number: block.number}, block, {upsert: true});
+};
+
+const insertTransactions  = async (txs) => {
+  if (txs.length !== 0) {
+    await txModel.remove({
+      hash: {$in: txs.map(tx => tx.hash)}
+    }).catch(log.error);
+
+    await txModel.insertMany(txs).catch(log.error.bind(log));
+  }
 };
 
 /**
  * @return {Promise return Number}
  */
 const findLastBlockNumber = async () => {
-  return await blockModel.findOne({network: config.node.network}, {number: 1}, {sort: {number: -1}});
+  return await blockModel.findOne({}, {number: 1}, {sort: {number: -1}});
 };
 
 /**
@@ -185,7 +196,7 @@ const findLastBlockNumber = async () => {
  * @return {Promise return Array of blockModel}
  */
 const countBlocksForNumbers = async (blockNumberChunk) => {
-  return await blockModel.count({network: config.node.network, number: {$in: blockNumberChunk}});
+  return await blockModel.count({number: {$in: blockNumberChunk}});
 };
 
 
@@ -203,8 +214,8 @@ module.exports = {
 
   saveBlock,
   removeBlocksForNumbers,
+  removeTxsForNumbers,
 
-  findUnconfirmedBlock,  
-  saveUnconfirmedBlock,   
-  removeUnconfirmedBlock  
+  saveUnconfirmedTxs,   
+  removeUnconfirmedTxs  
 };

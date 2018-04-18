@@ -26,7 +26,8 @@ const _ = require('lodash'),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
 
-  NodeListenerService = require('./services/nodeListenerService'),  
+  NodeListenerService = require('./services/nodeListenerService'), 
+  MasterNodeService = require('./services/MasterNodeService'), 
   blockRepo = require('./services/blockRepository'),
   requests = require('./services/nodeRequests'),
 
@@ -44,27 +45,9 @@ const _ = require('lodash'),
 
 const ws = new SockJS(`${config.node.websocket}/w/messages`);
 const client = Stomp.over(ws, {heartbeat: true, debug: false});
-const init = async function () {
 
-  let amqpConn = await amqp.connect(config.rabbit.url)
-    .catch(() => {
-      log.error('rabbitmq is not available!');
-      process.exit(0);
-    });
+const init = async () => {
 
-  let channel = await amqpConn.createChannel();
-
-  channel.on('close', () => {
-    log.error('rabbitmq process has finished!');
-    process.exit(0);
-  });
-
-  try {
-    await channel.assertExchange('events', 'topic', {durable: false});
-  } catch (e) {
-    log.error(e);
-    channel = await amqpConn.createChannel();
-  }
 
   try {
     await new Promise((res,rej) => client.connect({}, res, rej)).timeout(10000);
@@ -73,17 +56,46 @@ const init = async function () {
     log.error(e);
     process.exit(0);
   }
-  
-  const listener = new NodeListenerService(client);
-  const syncCacheService = new SyncCacheService(requests, blockRepo);
-  syncCacheService.events.on('block', async block => {
-    log.info(`${block.hash} (${block.number}) added to cache.`);
-    let filtered = await filterTxsByAccountsService(block.transactions).catch(log.error);
-    await Promise.all(filtered.map(item =>
-      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item, {block: block.number, unconfirmed: false}))))
-    ));
+
+  let amqpInstance = await amqp.connect(config.rabbit.url)
+    .catch(() => {
+      log.error('rabbitmq process has finished!');
+      process.exit(0);
+    });
+
+  let channel = await amqpInstance.createChannel();
+
+  channel.on('close', () => {
+    log.error('rabbitmq process has finished!');
+    process.exit(0);
   });
 
+  await channel.assertExchange('events', 'topic', {durable: false});
+
+
+  const masterNodeService = new MasterNodeService(channel, (msg) => log.info(msg));
+  await masterNodeService.start();
+
+
+  let blockEventCallback = async block => {
+    log.info(`${block.hash} (${block.number}) added to cache.`);
+    let filtered = await filterTxsByAccountsService(block.transactions);
+    await Promise.all(filtered.map(item =>
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
+    ));
+  };
+  let txEventCallback = async tx => {
+    let filtered = await filterTxsByAccountsService([tx]);
+    await Promise.all(filtered.map(item =>
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
+    ));
+  };
+
+  const listener = new NodeListenerService(client);
+  const syncCacheService = new SyncCacheService(requests, blockRepo);
+
+
+  syncCacheService.events.on('block', blockEventCallback);
 
   let endBlock = await syncCacheService.start()
     .catch((err) => {
@@ -95,9 +107,8 @@ const init = async function () {
     });
 
   await new Promise((res) => {
-    if (config.sync.shadow) {
+    if (config.sync.shadow)
       return res();
-    }
 
     syncCacheService.events.on('end', () => {
       log.info(`cached the whole blockchain up to block: ${endBlock}`);
@@ -105,29 +116,17 @@ const init = async function () {
     });
   });
 
+  const blockWatchingService = new BlockWatchingService(requests, listener, blockRepo, endBlock);  
+  blockWatchingService.events.on('block', blockEventCallback);
+  blockWatchingService.events.on('tx', txEventCallback);
 
-  const blockWatchingService = new BlockWatchingService(requests, listener, blockRepo, endBlock);
-
-  await blockWatchingService.startSync().catch(e => {
-    log.error(`error starting cache service: ${e}`);
-    process.exit(0);
+  await blockWatchingService.startSync().catch(err => {
+    if (_.get(err, 'code') === 0) {
+      log.error('no connections available or blockchain is not synced!');
+      process.exit(0);
+    }
   });
-
-  blockWatchingService.events.on('block', async block => {
-    log.info(`${block.hash} (${block.number}) added to cache.`);
-    let filtered = await filterTxsByAccountsService(block.transactions);
-    await Promise.all(filtered.map(item =>
-      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item, {block: block.number, unconfirmed: false}))))
-    ));
-  });
-
-  blockWatchingService.events.on('tx', async (tx) => {
-    let filtered = await filterTxsByAccountsService([tx]);
-    await Promise.all(filtered.map(item =>
-      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item, {block: -1, unconfirmed: true}))))
-    ));
-  });
-  
 
 };
+
 module.exports = init();

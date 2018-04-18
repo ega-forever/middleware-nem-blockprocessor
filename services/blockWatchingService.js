@@ -46,13 +46,14 @@ class blockWatchingService {
   async startSync () {
 
     if (this.isSyncing)
-    {return;}
+      return;
 
     this.isSyncing = true;
 
     const lastNumber = this.requests.getLastBlockNumber();
     if (!lastNumber) 
-    {await this.repo.removeUnconfirmedBlock();}
+      await this.repo.removeUnconfirmedTxs();
+    
 
     log.info(`caching from block:${this.currentHeight} for network:${config.node.network}`);
     this.lastBlocks = [];
@@ -63,20 +64,21 @@ class blockWatchingService {
 
   async doJob () {
 
-    while (this.isSyncing)  {
+    while (this.isSyncing)  
       try {
-        let block = await Promise.resolve(this.processBlock()).timeout(60000*5);
-        await this.repo.saveBlock(block, async (err) => {
+        const blockFromRequest = await Promise.resolve(this.processBlock()).timeout(60000*5);
+        const blockWithTxsFromDb = await this.repo.saveBlock(blockFromRequest, blockFromRequest.transactions, async (err) => {
           if (err) {
-            await this.repo.removeBlocks(block.number, config.consensus.lastBlocksValidateAmount);
-            log.info(`wrong sync state!, rollback to ${block.number - config.consensus.lastBlocksValidateAmount - 1} block`);
+            await this.repo.removeBlocksForNumbers(blockFromRequest.number, config.consensus.lastBlocksValidateAmount);
+            await this.repo.removeTxsForNumbers(blockFromRequest.number);
+            log.info(`wrong sync state!, rollback to ${blockFromRequest.number - config.consensus.lastBlocksValidateAmount - 1} block`);
           }
         });
 
         this.currentHeight++;
         _.pullAt(this.lastBlocks, 0);
-        this.lastBlocks.push(block.number);
-        this.events.emit('block', block);
+        this.lastBlocks.push(blockWithTxsFromDb.number);
+        this.events.emit('block', blockWithTxsFromDb);
       } catch (err) {
 
         if (err && err.code === 'ENOENT') {
@@ -98,20 +100,16 @@ class blockWatchingService {
         }
 
         if (![0, 1, 2, -32600].includes(_.get(err, 'code')))
-        {log.error(err);}
+          log.error(err);
 
       }
-    }
+    
 
   }
 
   async UnconfirmedTxEvent (tx) {
-    let currentUnconfirmedBlock = await this.repo.findUnconfirmedBlock();
-    const fullTx = await this.repo.createTransactions([tx]);
-    currentUnconfirmedBlock.transactions = _.union(currentUnconfirmedBlock.transactions, fullTx);
-
-    await this.repo.saveUnconfirmedBlock(currentUnconfirmedBlock);
-    this.events.emit('tx', _.get(fullTx, 0));
+    const txs = await this.repo.saveUnconfirmedTxs([tx]);
+    this.events.emit('tx', txs[0]);
   }
 
   async stopSync () {
@@ -126,8 +124,9 @@ class blockWatchingService {
 
   async processBlock () {
     let block = await this.getNewBlock(this.currentHeight+1);
-    if (!block || block.hash === undefined) 
-    {return Promise.reject({code: 0});}
+    if (!block || block.hash === undefined)  
+      return Promise.reject({code: 0});
+    
 
     const lastBlocks = await this.requests.getBlocksByNumbers(this.lastBlocks);
     const lastBlockHashes = _.chain(lastBlocks).map(block => _.get(block, 'hash')).compact().value();
@@ -135,10 +134,12 @@ class blockWatchingService {
     let savedBlocks = await this.repo.findBlocksByHashes(lastBlockHashes);
     savedBlocks = _.chain(savedBlocks).map(block => block.number).orderBy().value();
     if (savedBlocks.length !== this.lastBlocks.length) 
-    {return Promise.reject({code: 1});}
+      return Promise.reject({code: 1});
+    
 
-    const txs = await this.repo.createTransactions(block.transactions);    
-    return this.repo.createBlock(block, txs);
+    return _.merge(this.repo.createBlock(block), {
+      transactions: await this.repo.createTransactions(block.transactions),
+    });
   }
 
 }

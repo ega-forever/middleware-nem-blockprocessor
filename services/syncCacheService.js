@@ -51,18 +51,18 @@ class SyncCacheService {
   async doJob (buckets) {
 
     while (this.isSyncing)
-    {try {
-      let locker = {stack: {}, lock: false};
+      try {
+        let locker = {stack: {}, lock: false};
 
-      while (buckets.length)
-      {await this.runPeer(buckets, locker, 1);}
+        while (buckets.length)
+          await this.runPeer(buckets, locker, 1);
 
-      this.isSyncing = false;
-      this.events.emit('end');
+        this.isSyncing = false;
+        this.events.emit('end');
 
-    } catch (err) {
+      } catch (err) {
         log.error(err);
-      }}
+      }
 
   }
 
@@ -93,19 +93,19 @@ class SyncCacheService {
       locker.stack[index] = newChunkToLock;
       await Promise.mapSeries(newChunkToLock, async (blockNumber) => {
         let block = await this.requests.getBlockByNumber(blockNumber);
-        if (!block || !block.hash) {
+        if (!block || !block.hash) 
           return Promise.reject('not find block for number=' + blockNumber);
-        }
-        await this.repo.saveBlock(block);
+        
+        const blockWithTxsFromDb = await this.repo.saveBlock(block, block.transactions);
         _.pull(newChunkToLock, blockNumber);
-        this.events.emit('block', this.repo.createBlock(block));
+        this.events.emit('block', blockWithTxsFromDb);
       }).catch((e) => {
         if (e && e.code === 11000)
-        {return _.pull(newChunkToLock, newChunkToLock[0]);}
+          return _.pull(newChunkToLock, newChunkToLock[0]);
         log.error(e);
       });
       if (!newChunkToLock.length)
-      {_.pull(buckets, newChunkToLock);}
+        _.pull(buckets, newChunkToLock);
 
       delete locker.stack[index];
 
