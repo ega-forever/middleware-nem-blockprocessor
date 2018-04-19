@@ -9,7 +9,7 @@ const config = require('../config'),
 
 module.exports = async (accountTo, sum) => {
   // Create an NIS endpoint object
-  const servArr = config.node.server.split(/:/);
+  const servArr = config.dev.httpForTransaction.split(/:/);
   const endpoint = nem.model.objects.create('endpoint')(
     servArr[0] + ':' + servArr[1], servArr[2]
   );

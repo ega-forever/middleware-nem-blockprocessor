@@ -23,8 +23,6 @@ const _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
-  SockJS = require('sockjs-client'),
-  Stomp = require('webstomp-client'),
 
   NodeListenerService = require('./services/nodeListenerService'), 
   MasterNodeService = require('./services/MasterNodeService'), 
@@ -43,19 +41,9 @@ const _ = require('lodash'),
   })
 );
 
-const ws = new SockJS(`${config.node.websocket}/w/messages`);
-const client = Stomp.over(ws, {heartbeat: true, debug: false});
-
 const init = async () => {
 
 
-  try {
-    await new Promise((res,rej) => client.connect({}, res, rej)).timeout(10000);
-  } catch(e) {
-    log.error('NIS process has finished!');
-    log.error(e);
-    process.exit(0);
-  }
 
   let amqpInstance = await amqp.connect(config.rabbit.url)
     .catch(() => {
@@ -91,7 +79,7 @@ const init = async () => {
     ));
   };
 
-  const listener = new NodeListenerService(client);
+  const listener = new NodeListenerService();
   const syncCacheService = new SyncCacheService(requests, blockRepo);
 
 

@@ -4,7 +4,13 @@
 * @author Kirill Sergeev <cloudkserg11@gmail.com>
 */
 
+const _ = require('lodash');
+
 require('dotenv').config();
+
+const getProviders = (string) => _.chain(string).split(',')
+  .map(provider => provider.trim())
+  .value();
 
 const config = {
   mongo: {
@@ -21,10 +27,10 @@ const config = {
     shadow: parseInt(process.env.SYNC_SHADOW) || true
   },
   node: {
-    server: process.env.NIS || 'http://bigalice2.nem.ninja:7890',
     network: parseInt(process.env.NETWORK) || -104,
     networkName: process.env.NETWORK_NAME || 'testnet',
-    websocket: process.env.WEBSOCKET_NIS || 'http://bigalice2.nem.ninja:7778'
+    http: getProviders(process.env.HTTP_PROVIDERS) || ['http://bigalice2.nem.ninja:7890'],    
+    websocket: getProviders(process.env.WEBSOCKET_PROVIDERS) || ['http://bigalice2.nem.ninja:7778'],
   },
   consensus: {
     lastBlocksValidateAmount: parseInt(process.env.CONSENSUS_BLOCK_VALIDATE_AMOUNT) || 10
@@ -32,7 +38,7 @@ const config = {
   rabbit: {
     url: process.env.RABBIT_URI || 'amqp://localhost:5672',
     serviceName: process.env.RABBIT_SERVICE_NAME || 'app_nem'
-  },
+  }
 };
 
 module.exports = config;

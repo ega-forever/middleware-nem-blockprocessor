@@ -13,25 +13,35 @@ const request = require('request-promise'),
   log = bunyan.createLogger({name: 'app.services.nodeRequests'});
 
 
-const get = query => makeRequest(query, 'GET');
-const makeRequest = (path, method, body) => {
+const get = async query => await makeRequest(query, 'GET');
+
+
+const makeRequest = async (path, method, body) => {
   const options = {
     method,
     body,
-    uri: new URL(path, config.node.server),
     json: true
   };
-  return request(options).catch(async (e) => await errorHandler(e));
+
+  return await Promise.any(config.node.http.map(async (server) => {
+    return await request(_.merge(options, {
+      uri: new URL(path, server)
+    }));
+  })).timeout(10000).catch(async e => errorHandler(e));
 };
 
-const postWithoutError = (path, body) => {
+const postWithoutError = async (path, body) => {
   const options = {
     method: 'POST',
     body,
-    uri: new URL(path, config.node.server),
     json: true
   };
-  return request(options);
+
+  return await Promise.any(config.node.http.map(async (server) => {
+    return await request(_.merge(options, {
+      uri: new URL(path, server)
+    }));
+  })).timeout(10000).catch(() => {});
 };
 
 
@@ -71,7 +81,6 @@ const getBlockByNumber = async (height) => {
   }).catch(() => {});
   if (!block.height) 
     return {};
-  
   
   return createBlock(block); 
 };

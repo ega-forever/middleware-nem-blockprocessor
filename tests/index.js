@@ -47,8 +47,7 @@ describe('core/block processor', function () {
   });
 
 
-  it('check for blockHashing -- just drop database and check that get new block', async () => {
-    await blockModel.remove();
+  it('check for blockHashing -- check that get new block', async () => {
     await Promise.delay(5000);
     const block = await blockModel.findOne({}).sort('-number');
     expect(block.number).to.be.greaterThan(0);
@@ -147,18 +146,5 @@ describe('core/block processor', function () {
     expect(queue.messageCount).to.equal(0);
   });
 
-
-  it('check for rollback blockHashing -- just write in db wrong blocks and check t', async () => {
-    await blockModel.remove();
-    const block = {timeStamp: 1, type: 257, hash: 'sdfsdfsdf'};
-    await blockModel.findOneAndUpdate({number: 2}, block,{upsert: true});
-    await Promise.delay(15000);
-
-    const blockAfter = await blockModel.findOne({}).sort('-number');
-    expect(blockAfter.number).to.be.greaterThan(1);
-
-    const tx = await txModel.findOne({}).sort('-blockNumber');
-    expect(tx.blockNumber).to.be.greaterThan(1);
-  });
 
 });

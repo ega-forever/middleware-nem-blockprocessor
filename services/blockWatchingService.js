@@ -57,7 +57,8 @@ class blockWatchingService {
 
     log.info(`caching from block:${this.currentHeight} for network:${config.node.network}`);
     this.lastBlocks = [];
-    this.doJob();    
+    this.doJob();
+    await this.listener.start();
     await this.listener.onMessage( tx => this.UnconfirmedTxEvent(tx));
     
   }

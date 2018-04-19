@@ -13,7 +13,7 @@ const mongoose = require('mongoose'),
 
 const TX = new mongoose.Schema({
   blockNumber: {type: Number, required: true, index: true, default: -1},
-  timestamp: {type: Number, required: true, index: true, default: Date.now},  
+  timeStamp: {type: Number, required: true, index: true, default: Date.now},  
   
   amount: {type: Number, index: true},
   hash: {type: String, index: true, unique: true},
