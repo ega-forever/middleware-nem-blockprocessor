@@ -71,7 +71,6 @@ const saveUnconfirmedTxs = async (inputTxs) => {
 /**
  * 
  * @param {blockModel} block 
- * @param {Array of transactions || null} txs
  * @return {blockModel} 
  */
 const createBlock = (block) => {
