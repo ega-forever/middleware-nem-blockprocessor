@@ -24,15 +24,14 @@ const _ = require('lodash'),
   amqp = require('amqplib'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
 
-  NodeListenerService = require('./services/nodeListenerService'), 
-  MasterNodeService = require('./services/MasterNodeService'), 
+  MasterNodeService = require('./shared/services/MasterNodeService'), 
+  BlockWatchingService = require('./shared/services/blockWatchingService'),
+  SyncCacheService = require('./shared/services/syncCacheService'),
+  ProviderService = require('./shared/services/providerService'),
+
   blockRepo = require('./services/blockRepository'),
-  ProviderService = require('./services/providerService'),
+  NodeListenerService = require('./services/nodeListenerService'),   
   requests = require('./services/nodeRequests'),
-
-
-  BlockWatchingService = require('./services/blockWatchingService'),
-  SyncCacheService = require('./services/syncCacheService'),
   filterTxsByAccountsService = require('./services/filterTxsByAccountsService');
 
 [mongoose.accounts, mongoose.connection].forEach(connection =>
@@ -76,29 +75,30 @@ const init = async () => {
     ));
   };
 
-  const masterNodeService = new MasterNodeService(channel, (msg) => log.info(msg));
+  const masterNodeService = new MasterNodeService(channel, config.rabbit.serviceName);
   await masterNodeService.start();
 
-  const providerService = new ProviderService(config.node.providers);
+  const providerService = new ProviderService(config.node.providers, requests.getHeightForProvider);
+  await providerService.selectProvider();
+
   const listener = new NodeListenerService(providerService);
+  await listener.selectClient();
+
   const requestsInstance = requests.createInstance(providerService);
-  await providerService.selectProvider();  
-  
   const syncCacheService = new SyncCacheService(requestsInstance, blockRepo);
 
 
   syncCacheService.events.on('block', blockEventCallback);
 
-  let endBlock = await syncCacheService.start()
-    .catch((err) => {
-      if (_.get(err, 'code') === 0) {
-        log.info('nodes are down or not synced!');
-        process.exit(0);
-      }
-      log.error(err);
-    });
+  let endBlock = await syncCacheService.start(config.consensus.lastBlocksValidateAmount).catch((err) => {
+    if (_.get(err, 'code') === 0) {
+      log.info('nodes are down or not synced!');
+      process.exit(0);
+    }
+    log.error(err);
+  });
 
-  await new Promise((res) => {
+  await new Promise(res => {
     if (config.sync.shadow)
       return res();
 
@@ -109,10 +109,13 @@ const init = async () => {
   });
 
   const blockWatchingService = new BlockWatchingService(requestsInstance, listener, blockRepo, endBlock);  
+  blockWatchingService.setNetwork(config.node.network);
+  blockWatchingService.setConsensusAmount(config.consensus.lastBlocksValidateAmount);
   blockWatchingService.events.on('block', blockEventCallback);
   blockWatchingService.events.on('tx', txEventCallback);
 
-  await blockWatchingService.startSync(providerService.getProvider().getHeight()).catch(err => {
+  const provider = await providerService.getProvider();
+  await blockWatchingService.startSync(provider.getHeight()).catch(err => {
     if (_.get(err, 'code') === 0) {
       log.error('no connections available or blockchain is not synced!');
       process.exit(0);

@@ -52,14 +52,12 @@ class NodeListenerService {
   }
 
   async selectClient () {
-    const provider = this.providerService.getProvider(),
+    const provider = await this.providerService.getProvider(),
       onError = this.processError.bind(this, provider);
 
     try{
       this.client = this.createStompClient(provider.getWs(), onError);
-      await new Promise(res => this.client.connect(
-        {}, res, async () => await onError()
-      )).timeout(MAX_WAIT_TIME);
+      await new Promise((res, rej) => this.client.connect({}, res, rej)).timeout(MAX_WAIT_TIME);
     } catch(e) {
       log.error(e);
       if (onError) await onError();

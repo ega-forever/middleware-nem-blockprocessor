@@ -49,12 +49,14 @@ const getHeightForProvider = async (providerUri) => {
  */
 const createInstance = (providerService) => {
   
-  const createProviderUrl = (path) => {
-    return createUrl(providerService.getProvider().getHttp(), path);
+  const createProviderUrl = async (path) => {
+    const provider = await providerService.getProvider();
+    return createUrl(provider.getHttp(), path);
   };
 
   const post = async (path, body) => {
-    return await makeRequest(createProviderUrl(path), 'POST', body);
+    const providerUrl = await createProviderUrl(path);
+    return await makeRequest(providerUrl, 'POST', body);
   };
 
   return {
@@ -90,7 +92,8 @@ const createInstance = (providerService) => {
      * @return {Promise return Number}
      */
     async getLastBlockNumber () {
-      return await getHeightForProvider(providerService.getProvider().getHttp());
+      const provider = await providerService.getProvider();
+      return await getHeightForProvider(provider.getHttp());
     },
     
     

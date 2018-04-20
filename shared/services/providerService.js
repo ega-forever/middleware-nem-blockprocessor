@@ -7,11 +7,10 @@
  */
 const Promise = require('bluebird'),
   Provider = require('../models/provider'),
-  requests = require('./nodeRequests'),
   EventEmitter = require('events'),
   _  = require('lodash'),
   bunyan = require('bunyan'),
-  log = bunyan.createLogger({name: 'app.services.providerService'});
+  log = bunyan.createLogger({name: 'shared.services.providerService'});
 
 const MIN_HEIGHT = 0,
   DISABLE_TIME = 10000;
@@ -21,14 +20,15 @@ class ProviderService {
   /**
    * Creates an instance of ProviderService.
    * @param {Array of Object {ws, http} configProviders 
+   * @param {Function} getHeightForProvider (String providerUri) => Number height
    * 
    * @memberOf ProviderService
    */
-  constructor (configProviders) {
+  constructor (configProviders, getHeightForProvider) {
     this._configProviders = configProviders;
-    this._provider = this.createProvider(this._configProviders[0]);
     this._disableProviders = [];
     this.events = new EventEmitter();
+    this.getHeightForProvider = getHeightForProvider;
   }
 
   /**
@@ -37,6 +37,7 @@ class ProviderService {
    * @memberOf ProviderService
    */
   disableProvider (provider) {
+    this._provider = undefined;
     log.info('disable provider ' + provider.getHttp());    
     this._disableProviders.push(provider);
     setTimeout(this.enableProvider.bind(this, provider), DISABLE_TIME);
@@ -49,48 +50,69 @@ class ProviderService {
    * @memberOf ProviderService
    */
   async selectProvider () {
-    const providers = _.filter(await Promise.map(this.getEnableProviders(), async configProvider => {
-      const height = await requests.getHeightForProvider(configProvider.http);
-      return this.createProvider(configProvider, height);
-    }), provider => provider !== requests.EMPTY_HEIGHT);
-
+    const providers = await this.getEnableProvidersWithNewHeights();
     if (providers.length === 0) {
       log.error('not found enabled http/ws providers');
       process.exit(0);
     }
 
-    this._provider = _.maxBy(providers, provider => provider.getHeight());
-    log.info('select provider ' + this._provider.getHttp());    
-    this.events.emit('change', this._provider);
+    const maxProvider = _.maxBy(providers, provider => provider.getHeight());
+    if (this.isNewProvider(maxProvider))  
+      this.replaceProvider(maxProvider);
   }
+
 
   /**
    * 
    * 
-   * @returns {Provider}
+   * @returns {Promise return Provider}
    * 
    * @memberOf ProviderService
    */
-  getProvider () {
+  async getProvider () {
+    if (this._provider === undefined)
+      await this.selectProvider();
     return this._provider;
+  }
+
+  async getEnableProvidersWithNewHeights () {
+    return _.filter(
+      await Promise.map(this.getEnableConfigProviders(), this.createProviderWithHeight.bind(this)),
+      provider => provider.getHeight() > 0
+    );
+  }
+
+  async createProviderWithHeight (configProvider) {
+    const height = await this.getHeightForProvider(configProvider.http).catch(() => -1);
+    return this.createProvider(configProvider, height);
   }
 
   createProvider (configProvider, height = MIN_HEIGHT) {
     return new Provider(configProvider.ws, configProvider.http, height);
   }
 
+  isNewProvider (provider) {
+    return (this._provider === undefined || provider.getHeight() !== this._provider.getHeight());
+  }
+
+  replaceProvider (provider) {
+    this._provider = provider;
+    this.events.emit('change', provider);
+    log.info('select provider ' + provider.getHttp());    
+  }
+
   enableProvider (provider) {
     _.pull(this._disableProviders, provider);
   }
 
-  isEnableProvider (configProvider) {
+  isEnableConfigProvider (configProvider) {
     return _.find(this._disableProviders, provider => {
       return (provider.getWs() === configProvider.ws && provider.getHttp() === configProvider.http);
     }) === undefined;
   }
 
-  getEnableProviders () {
-    return _.filter(this._configProviders, this.isEnableProvider.bind(this));
+  getEnableConfigProviders () {
+    return _.filter(this._configProviders, this.isEnableConfigProvider.bind(this));
   }
 }
 

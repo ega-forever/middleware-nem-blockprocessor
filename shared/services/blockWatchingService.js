@@ -3,13 +3,12 @@
 * Licensed under the AGPL Version 3 license.
 * @author Kirill Sergeev <cloudkserg11@gmail.com>
 */
-const config = require('../config'),
-  bunyan = require('bunyan'),
+const  bunyan = require('bunyan'),
   _ = require('lodash'),
   Promise = require('bluebird'),
 
   EventEmitter = require('events'),
-  log = bunyan.createLogger({name: 'app.services.blockWatchingService'});
+  log = bunyan.createLogger({name: 'shared.services.blockWatchingService'});
 
 /**
  * @service
@@ -41,6 +40,17 @@ class blockWatchingService {
     this.lastBlocks = [];
     this.isSyncing = false;
 
+    this.networkId = '-104';
+    this.consensusAmount = '';
+
+  }
+
+  setNetwork (networkName) {
+    this.networkName = networkName;
+  }
+
+  setConsensusAmount (consensusAmount) {
+    this.consensusAmount = consensusAmount;
   }
 
   async startSync (maxHeight) {
@@ -54,7 +64,7 @@ class blockWatchingService {
       await this.repo.removeUnconfirmedTxs();
     
 
-    log.info(`caching from block:${this.currentHeight} for network:${config.node.network}`);
+    log.info(`caching from block:${this.currentHeight} for network:${this.networkId}`);
     this.lastBlocks = [];
     this.doJob();
     await this.listener.start();
@@ -69,9 +79,9 @@ class blockWatchingService {
         const blockFromRequest = await Promise.resolve(this.processBlock()).timeout(60000*5);
         const blockWithTxsFromDb = await this.repo.saveBlock(blockFromRequest, blockFromRequest.transactions, async (err) => {
           if (err) {
-            await this.repo.removeBlocksForNumbers(blockFromRequest.number, config.consensus.lastBlocksValidateAmount);
+            await this.repo.removeBlocksForNumbers(blockFromRequest.number, this.consensusAmount);
             await this.repo.removeTxsForNumbers(blockFromRequest.number);
-            log.info(`wrong sync state!, rollback to ${blockFromRequest.number - config.consensus.lastBlocksValidateAmount - 1} block`);
+            log.info(`wrong sync state!, rollback to ${blockFromRequest.number - this.consensusAmount - 1} block`);
           }
         });
 

@@ -3,9 +3,8 @@
  * Licensed under the AGPL Version 3 license.
  */
 
-const config = require('../config'),
-  bunyan = require('bunyan'),
-  log = bunyan.createLogger({name: 'app.services.MasterNodeService'}),
+const bunyan = require('bunyan'),
+  log = bunyan.createLogger({name: 'shared.services.MasterNodeService'}),
   Promise = require('bluebird'),
   uniqid = require('uniqid');
 
@@ -37,17 +36,18 @@ class MasterNode {
    * Constructor, that only create main variables in class
    * not done anything work
    *
-   * @param _channel [from amqplib] _channel Channel, through send and response messages
+   * @param {AmqpClient} _channel [from amqplib] _channel Channel, through send and response messages
+   * @param {String} rabbitPrefix config.rabbit.serviceName | 'app_eth'
    *
    * @memberOf MasterNode
    */
-  constructor (_channel) {
+  constructor (_channel, rabbitPrefix) {
     this._myid = uniqid();
     this._queues = {
-      findMasterQueue: `${config.rabbit.serviceName}_findMaster_${this._myid}`,
-      findMasterRoute: `${config.rabbit.serviceName}_findMaster`,
-      setMasterQueue: `${config.rabbit.serviceName}_setMaster_${this._myid}`,
-      setMasterRoute: `${config.rabbit.serviceName}_setMaster`
+      findMasterQueue: `${rabbitPrefix}_findMaster_${this._myid}`,
+      findMasterRoute: `${rabbitPrefix}_findMaster`,
+      setMasterQueue: `${rabbitPrefix}_setMaster_${this._myid}`,
+      setMasterRoute: `${rabbitPrefix}_setMaster`
     };
 
     this.channel = _channel;

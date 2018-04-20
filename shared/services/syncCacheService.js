@@ -8,7 +8,7 @@ const bunyan = require('bunyan'),
   Promise = require('bluebird'),
   EventEmitter = require('events'),
   allocateBlockBuckets = require('../utils/allocateBlockBuckets'),
-  log = bunyan.createLogger({name: 'app.services.syncCacheService'});
+  log = bunyan.createLogger({name: 'shared.services.syncCacheService'});
 
 /**
  * @service
@@ -34,9 +34,9 @@ class SyncCacheService {
     this.isSyncing = true;
   }
 
-  async start () {
+  async start (consensusAmount) {
     await this.indexCollection();
-    let data = await allocateBlockBuckets(this.requests, this.repo, this.startIndex);
+    let data = await allocateBlockBuckets(this.requests, this.repo, this.startIndex, consensusAmount);
     
     this.doJob(data.missedBuckets);
     return data.height;

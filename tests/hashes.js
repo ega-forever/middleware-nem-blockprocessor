@@ -8,7 +8,7 @@ const hashes = require('../services/hashes'),
   config = require('./config'),
   requests = require('../services/nodeRequests'),
   expect = require('chai').expect,
-  ProviderService = require('../services/providerService'),
+  ProviderService = require('../shared/services/providerService'),
   Promise = require('bluebird');
 
 
@@ -91,7 +91,7 @@ describe('core/block processor', function () {
 
     const blockIds = _.reduce(exampleBlocks, (result, block) => _.merge(result, block), []);
 
-    const providerService = new ProviderService(config.node.providers);
+    const providerService = new ProviderService(config.node.providers, requests.getHeightForProvider);
     await providerService.selectProvider();
     const requestsInstance = requests.createInstance(providerService);
 
