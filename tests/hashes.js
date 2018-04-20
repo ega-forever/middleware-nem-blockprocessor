@@ -5,8 +5,10 @@
 */
 const hashes = require('../services/hashes'),
   _ = require('lodash'),
+  config = require('./config'),
   requests = require('../services/nodeRequests'),
   expect = require('chai').expect,
+  ProviderService = require('../services/providerService'),
   Promise = require('bluebird');
 
 
@@ -88,9 +90,14 @@ describe('core/block processor', function () {
     };
 
     const blockIds = _.reduce(exampleBlocks, (result, block) => _.merge(result, block), []);
+
+    const providerService = new ProviderService(config.node.providers);
+    await providerService.selectProvider();
+    const requestsInstance = requests.createInstance(providerService);
+
     await Promise.map(blockIds, async (blockId) => {
-      const block = await requests.getBlockByNumber(blockId);
-      const blockCompare = await requests.getBlockByNumber(blockId+1);
+      const block = await requestsInstance.getBlockByNumber(blockId);
+      const blockCompare = await requestsInstance.getBlockByNumber(blockId+1);
       expect(hashes.calculateBlockHash(block)).to.be.equal(blockCompare.prevBlockHash.data);
     });
   });

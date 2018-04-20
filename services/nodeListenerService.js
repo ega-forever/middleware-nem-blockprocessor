@@ -4,26 +4,25 @@
 * @author Kirill Sergeev <cloudkserg11@gmail.com>
 */
 const bunyan = require('bunyan'),
-  config = require('../config'),
   Promise = require('bluebird'),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client'),
   log = bunyan.createLogger({name: 'app.services.nodeListenerService'});
 
+const MAX_WAIT_TIME = 5000;
 
 class NodeListenerService {
   /**
-   * 
-   * 
-   * 
+   * @param {ProviderService} providers
    * @memberOf NodeListenerService
    */
-  constructor () {
-
-
-
+  constructor (providerService) {
+    this.providerService = providerService;
     this.client = undefined;    
     this.subscribedCallback = undefined;
+
+
+    this.providerService.events.on('change', this.selectClient.bind(this));
     
   }
 
@@ -31,48 +30,46 @@ class NodeListenerService {
     await this.selectClient();
   }
 
-  createStompClient (uri) {
+
+  createStompClient (uri, onError) {
     const ws = new SockJS(`${uri}/w/messages`);
     const client =  Stomp.over(ws, {heartbeat: true, debug: false});
     
-    ws.onclose = () => {
-      this.processError(client);
+    ws.onclose = async () => {
+      await onError();
     };
-    ws.onerror = () => {
-      this.processError(client);
+    ws.onerror = async () => {
+      await onError();
     };
 
     return client;
   }
 
+  async processError (provider) {
+    log.info('error on ws/stomp client, disable currebt provider');
+    this.providerService.disableProvider(provider);
+    await this.providerService.selectProvider();
+  }
+
   async selectClient () {
+    const provider = this.providerService.getProvider(),
+      onError = this.processError.bind(this, provider);
+
     try{
-      this.client = await Promise.any(config.node.websocket.map(uri => {
-        const client = this.createStompClient(uri);
-
-        return new Promise(res => client.connect(
-          {}, () => res(client), this.processError.bind(this)
-        ));
-      })).timeout(3000);
-
+      this.client = this.createStompClient(provider.getWs(), onError);
+      await new Promise(res => this.client.connect(
+        {}, res, async () => await onError()
+      )).timeout(MAX_WAIT_TIME);
     } catch(e) {
       log.error(e);
-      log.error('all stomp clients not responsed, refreshing clients');
-      setTimeout(this.selectClient.bind(this), 5000);
+      if (onError) await onError();
       return;   
     }
 
-    log.info('set new ws provider');
     if (this.subscribedCallback !== undefined && this.client !== undefined)
       this.subscribe();
   }
 
-  async processError (errorClient) {
-    if ((this.client === undefined) || (this.client.connected === false) || (errorClient.ws.url === this.client.ws.url)) {
-      log.info('error on stomp client, refreshing clients');
-      await this.selectClient();
-    }
-  }
 
   subscribe () {
     if (this.client !== undefined)
@@ -92,9 +89,14 @@ class NodeListenerService {
   }
 
 
+  /**
+   * 
+   * @memberOf NodeListenerService
+   */
   async stop () {
-    this.subscribedCallback = undefined;    
-    this.client.unsubscribe(this.subscribeUnconfirmedTxId);
+    this.subscribedCallback = undefined; 
+    if (this.client)   
+      this.client.unsubscribe(this.subscribeUnconfirmedTxId);
   }
 }
 

@@ -43,15 +43,14 @@ class blockWatchingService {
 
   }
 
-  async startSync () {
+  async startSync (maxHeight) {
 
     if (this.isSyncing)
       return;
 
     this.isSyncing = true;
 
-    const lastNumber = this.requests.getLastBlockNumber();
-    if (!lastNumber) 
+    if (!maxHeight) 
       await this.repo.removeUnconfirmedTxs();
     
 

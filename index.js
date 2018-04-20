@@ -27,6 +27,7 @@ const _ = require('lodash'),
   NodeListenerService = require('./services/nodeListenerService'), 
   MasterNodeService = require('./services/MasterNodeService'), 
   blockRepo = require('./services/blockRepository'),
+  ProviderService = require('./services/providerService'),
   requests = require('./services/nodeRequests'),
 
 
@@ -61,10 +62,6 @@ const init = async () => {
   await channel.assertExchange('events', 'topic', {durable: false});
 
 
-  const masterNodeService = new MasterNodeService(channel, (msg) => log.info(msg));
-  await masterNodeService.start();
-
-
   let blockEventCallback = async block => {
     log.info(`${block.hash} (${block.number}) added to cache.`);
     let filtered = await filterTxsByAccountsService(block.transactions);
@@ -79,8 +76,15 @@ const init = async () => {
     ));
   };
 
-  const listener = new NodeListenerService();
-  const syncCacheService = new SyncCacheService(requests, blockRepo);
+  const masterNodeService = new MasterNodeService(channel, (msg) => log.info(msg));
+  await masterNodeService.start();
+
+  const providerService = new ProviderService(config.node.providers);
+  const listener = new NodeListenerService(providerService);
+  const requestsInstance = requests.createInstance(providerService);
+  await providerService.selectProvider();  
+  
+  const syncCacheService = new SyncCacheService(requestsInstance, blockRepo);
 
 
   syncCacheService.events.on('block', blockEventCallback);
@@ -104,11 +108,11 @@ const init = async () => {
     });
   });
 
-  const blockWatchingService = new BlockWatchingService(requests, listener, blockRepo, endBlock);  
+  const blockWatchingService = new BlockWatchingService(requestsInstance, listener, blockRepo, endBlock);  
   blockWatchingService.events.on('block', blockEventCallback);
   blockWatchingService.events.on('tx', txEventCallback);
 
-  await blockWatchingService.startSync().catch(err => {
+  await blockWatchingService.startSync(providerService.getProvider().getHeight()).catch(err => {
     if (_.get(err, 'code') === 0) {
       log.error('no connections available or blockchain is not synced!');
       process.exit(0);
