@@ -8,15 +8,6 @@ const _ = require('lodash');
 
 require('dotenv').config();
 
-const getProviders = (string) => _.chain(string).split(',')
-  .map(provider => {
-    const data = provider.split('@');
-    return {
-      http: data[0].trim(),
-      ws: data[1].trim()
-    };
-  })
-  .value();
 
 const config = {
   mongo: {
