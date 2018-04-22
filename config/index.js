@@ -35,7 +35,7 @@ const config = {
   node: {
     network: parseInt(process.env.NETWORK) || -104,
     networkName: process.env.NETWORK_NAME || 'testnet',
-    providers: getProviders(process.env.PROVIDERS) || [{http:'http://bigalice2.nem.ninja:7890', ws: 'http://bigalice2.nem.ninja:7778'}]
+    providers: process.env.PROVIDERS && getProviders(process.env.PROVIDERS) || [{http:'http://bigalice2.nem.ninja:7890', ws: 'http://bigalice2.nem.ninja:7778'}]
   },
   consensus: {
     lastBlocksValidateAmount: parseInt(process.env.CONSENSUS_BLOCK_VALIDATE_AMOUNT) || 10
