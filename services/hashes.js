@@ -33,9 +33,9 @@ const serializeEmpty = () => {
 };
 
 const serializeObject = (buffer) => {
-  if (buffer.limit === 0) {
+  if (buffer.limit === 0) 
     return serializeEmpty();
-  }
+  
 
   const bb = new ByteBuffer(0, ByteBuffer.LITTLE_ENDIAN);
   bb.writeUint32(buffer.limit);
@@ -46,9 +46,9 @@ const serializeObject = (buffer) => {
 };
 
 const serializeObjectArray = (objects, serializeFields) => {
-  if (objects === null) {
+  if (objects === null) 
     return serializeEmpty();
-  }
+  
   const bb = new ByteBuffer(0, ByteBuffer.LITTLE_ENDIAN);
   bb.writeUint32(objects.length);
   _.each(objects, obj => bb.append(serializeObject(serializeFields(obj))));
@@ -75,9 +75,9 @@ const serializeChars = (string) => {
 };
 
 const serializeString = (string) => {
-  if (string == null) {
+  if (string == null) 
     return serializeEmptyString();   
-  }
+  
 
   const bb = new ByteBuffer(0, ByteBuffer.LITTLE_ENDIAN);
   const charsBb = serializeChars(string);
@@ -98,9 +98,9 @@ const serializeTransferTransaction = (transaction, includeVerifyable) => {
   bb.append(serializeString(transaction.recipient));
   bb.writeUint64(transaction.amount);
   bb.append(serializeObject(serializeMessage(transaction.message)));
-  if (isMosaicVersion(transaction.version)) {
+  if (isMosaicVersion(transaction.version)) 
     bb.append(serializeObjectArray(transaction.mosaics, serializeMosaics));
-  }
+  
   bb.flip();    
     
   return bb;
@@ -123,9 +123,9 @@ const isVersionModificable = (version) => {
 const serializeMultisigAggregateTransaction = (transaction, includeVerifyable) => {
   const bb = serializeCoreTransaction(transaction, includeVerifyable);
   bb.append(serializeObjectArray(transaction.modifications, serializeModification));
-  if (isVersionModificable(transaction.version)) {
+  if (isVersionModificable(transaction.version)) 
     bb.append(serializeObject(serializeMinCosignatories(transaction.minCosignatories)));
-  }
+  
   bb.flip();        
   return bb;
 };
@@ -134,9 +134,9 @@ const serializeMultisigTransaction = (transaction, includeVerifyable) => {
   const bb = serializeCoreTransaction(transaction, includeVerifyable);
   bb.append(serializeObject(serializeOtherTrans(transaction.otherTrans)));
     
-  if (includeVerifyable) {
+  if (includeVerifyable) 
     bb.append(serializeObjectArray(transaction.signatures, serializeMultisigSignatureTransaction));
-  }
+  
   bb.flip();
   return bb;
 };
@@ -205,9 +205,9 @@ const serializeCoreTransaction = (transaction, includeVerifyable) => {
   bb.writeUint32(transaction.timeStamp);
   bb.append(hex2Buffer(transaction.signer).buffer);
 
-  if (includeVerifyable) {
+  if (includeVerifyable) 
     bb.append(hex2Buffer(transaction.signature).buffer);
-  }
+  
   bb.writeUint64(transaction.fee);
   bb.writeUint32(transaction.deadline);
 
@@ -216,9 +216,9 @@ const serializeCoreTransaction = (transaction, includeVerifyable) => {
 };
 
 const serializeTransaction = (transaction, includeVerifyable = true) => {
-  if (TRANSACTION_TYPE_HANDLERS[transaction.type] === undefined) {
+  if (TRANSACTION_TYPE_HANDLERS[transaction.type] === undefined) 
     throw new Error(`unknown nem transaction type ${transaction.type}`);
-  }
+  
   return TRANSACTION_TYPE_HANDLERS[transaction.type](transaction, includeVerifyable);
 };
 
@@ -242,9 +242,9 @@ const serializeBlock = (block) => {
 };
 
 const serializeEntity = (object, fieldFiller) => {
-  if (_.isEmpty(object)) {
+  if (_.isEmpty(object)) 
     return serializeEmptyObject();
-  }
+  
 
   const bb = new ByteBuffer(0, ByteBuffer.LITTLE_ENDIAN);     
   fieldFiller(bb);
@@ -295,9 +295,9 @@ const serializeMosaicDefinition = (definition) => {
 };
 
 const serializeOtherTrans = (trans) => {
-  if (_.isEmpty(trans)) {
+  if (_.isEmpty(trans)) 
     return serializeEmptyObject();
-  } 
+   
   return serializeTransaction(trans, false);
 };
 
