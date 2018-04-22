@@ -18,6 +18,7 @@ const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   createTransaction = require('./helpers/createTransaction'),
   consumeStompMessages = require('./helpers/consumeStompMessages'),
   blockModel = require('../models/blockModel'),
+  txModel = require('../models/txModel'),
   accountModel = require('../models/accountModel'),
   WebSocket = require('ws'),
   expect = require('chai').expect,
@@ -46,16 +47,17 @@ describe('core/block processor', function () {
   });
 
 
-  it('check for blockHashing -- just drop database and check that get new block', async () => {
-    await blockModel.remove();
+  it('check for blockHashing -- check that get new block', async () => {
     await Promise.delay(5000);
-    const block = await blockModel.findOne({network: config.node.network}).sort('-number');
+    const block = await blockModel.findOne({}).sort('-number');
     expect(block.number).to.be.greaterThan(0);
+    const tx = await txModel.findOne({}).sort('-blockNumber');
+    expect(tx.blockNumber).to.be.greaterThan(0);
   });
 
 
 
-  it('send some nem from account0 to account1 and validate countMessages(2) and structure message', async () => {
+  it('send some nem from account0 to account1 and validate messages and db', async () => {
 
 
     const checkMessage = function (content) {
@@ -70,29 +72,48 @@ describe('core/block processor', function () {
         'message',
         'version',
         'signer',
-        'unconfirmed'
+        'blockNumber'
       );
-      expect(content.recipient).to.be.equal(accounts[0]);
+      expect(content.sender).to.be.equal(accounts[0]);
+
+      expect(content.recipient).to.be.equal(accounts[1]);
+
+      expect(content.amount).to.be.equal(1);
       expect(content.type).to.be.equal(257);
+      return true;
     };
+
+    const checkDb = async function (transaction) {
+      if (transaction.blockNumber !== -1)  {
+        const block = await blockModel.findOne({number: transaction.blockNumber});
+        expect(block.number).to.equal(transaction.blockNumber);
+      }
+
+      const tx = await txModel.findOne({hash: transaction.hash});
+      expect(tx.amount).to.equal(transaction.amount);
+      expect(tx.sender).to.equal(transaction.sender);
+      expect(tx.recipient).to.equal(transaction.recipient);
+      return true;
+    };
+    let tx;
 
     return await Promise.all([
       (async () => {
-        const tx =await createTransaction(accounts[0], 0.000001);
-        if (tx.code === 5) {
+        tx =await createTransaction(accounts[1], 0.000001);
+        if (tx.code === 5) 
           throw new Error('Account has not balance');
-        }
+        
       })(),
       (async () => {
         const channel = await amqpInstance.createChannel();  
         await connectToQueue(channel);
         return await consumeMessages(1, channel, (message) => {
           const content = JSON.parse(message.content);
-          if (content.recipient === accounts[0]) {
+          if (tx.timeStamp && content.timeStamp === tx.timeStamp) {
             checkMessage(content);
+            checkDb(content);
             return true;
           }
-          channel.ack(message);                    
           return false;
         });
       })(),
@@ -101,8 +122,9 @@ describe('core/block processor', function () {
         const client = Stomp.over(ws, {heartbeat: false, debug: false});
         await consumeStompMessages(1, client, (message) => {
           const body = JSON.parse(message.body);
-          if (body.recipient === accounts[0]) {
+          if (tx.timeStamp && body.timeStamp === tx.timeStamp) {
             checkMessage(body);
+            checkDb(body);
             return true;
           }
           return false;
@@ -115,23 +137,14 @@ describe('core/block processor', function () {
   it('delete accounts and send transfer transaction and after delay 0 messages', async () => {
     await accountModel.remove();
     let tx =await createTransaction(accounts[0], 0.000001);
-    if (tx.code === 5) {
+    if (tx.code === 5) 
       throw new Error('Account has not balance');
-    }
-    await Promise.delay(1000);
+    
+    await Promise.delay(8000);
     const channel = await amqpInstance.createChannel();  
     const queue =await connectToQueue(channel); 
     expect(queue.messageCount).to.equal(0);
   });
 
-
-  it('check for rollback blockHashing -- just write in db wrong blocks and check t', async () => {
-    await blockModel.remove();
-    const block = {timeStamp: 1, type: 257, hash: 'sdfsdfsdf'};
-    await blockModel.findOneAndUpdate({number: 2}, block,{upsert: true});
-    await Promise.delay(15000);
-    const blockAfter = await blockModel.findOne({network: config.node.network}).sort('-number');
-    expect(blockAfter.number).to.be.greaterThan(1);
-  });
 
 });
