@@ -82,6 +82,7 @@ const createInstance = (providerService) => {
       const block = await post('block/at/public', {
         height: (height > 1 ? height : 1)
       }).catch(() => {});
+
       if (!block || !block.height) 
         return {};
       
