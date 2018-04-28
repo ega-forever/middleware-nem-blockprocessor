@@ -8,6 +8,12 @@ const _ = require('lodash');
 
 require('dotenv').config();
 
+const getDefault = () => {
+  return (
+    (process.env.NIS || 'http://192.3.61.243:7890') + '@' +  
+    (process.env.WEBSOCKET_NIS || 'http://192.3.61.243:7778')
+  );
+};
 
 const config = {
   mongo: {
@@ -26,7 +32,7 @@ const config = {
   node: {
     network: parseInt(process.env.NETWORK) || -104,
     networkName: process.env.NETWORK_NAME || 'testnet',
-    providers: _.chain(process.env.PROVIDERS || 'http://192.3.61.243:7890@http://192.3.61.243:7778')
+    providers: _.chain(process.env.PROVIDERS || getDefault())
       .split(',')
       .map(provider => {
         const data = provider.split('@');

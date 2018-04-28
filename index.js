@@ -91,11 +91,8 @@ const init = async () => {
   syncCacheService.events.on('block', blockEventCallback);
 
   let endBlock = await syncCacheService.start(config.consensus.lastBlocksValidateAmount).catch((err) => {
-    if (_.get(err, 'code') === 0) {
-      log.info('nodes are down or not synced!');
-      process.exit(0);
-    }
-    log.error(err);
+    _.get(err, 'code') === 0 ? log.info('nodes are down or not synced!') : log.error(err);
+    process.exit(0);
   });
 
   await new Promise(res => {
