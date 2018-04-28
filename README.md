@@ -117,8 +117,7 @@ RABBIT_SERVICE_NAME=app_nem
 NETWORK=development
 
 SYNC_SHADOW=1
-NIS=http://192.3.61.243:7890
-WEBSOCKET_NIS=http://192.3.61.243:7778
+PROVIDERS=http://192.3.61.243:7890@http://192.3.61.243:7778
 ```
 
 The options are presented below:
@@ -135,8 +134,7 @@ The options are presented below:
 | RABBIT_SERVICE_NAME   | namespace for all rabbitmq queues, like 'app_nem_transaction'
 | NETWORK   | network name (alias)- is used for connecting via ipc (see block processor section)
 | SYNC_SHADOW   | sync blocks in background
-| NIS   | the paths to node rest api
-| WEBSOCKET_NIS   | the path to node websocket 
+| PROVIDERS   | 'the path to node rest api'@'the path to node websocket'
 
 License
 ----
