@@ -87,6 +87,9 @@ describe('core/block processor', function () {
       if (transaction.blockNumber !== -1)  {
         const block = await blockModel.findOne({number: transaction.blockNumber});
         expect(block.number).to.equal(transaction.blockNumber);
+        expect(block.txs).to.not.empty;
+        const txHash = _.find(block.txs, hash => hash === transaction.hash);
+        expect(txHash).to.not.undefined;
       }
 
       const tx = await txModel.findOne({hash: transaction.hash});
