@@ -131,28 +131,25 @@ const createTransactions = async (txs, blockNumber) => {
  **/
 const saveBlock = async (inputBlock, inputTxs, afterSave = () => {}) => {
   return await new Promise(async (res, rej) => {
-    sem.take(async () => {
-      let outputBlock = null;
-      let outputError = null;
-      try {
-        const block = createBlock(inputBlock);
-        const txs = await createTransactions(inputTxs, block.height);
-        block.txs = txs.map(tx => tx.hash);        
+    try {
+      const block = createBlock(inputBlock);
+      const txs = await createTransactions(inputTxs, block.height);
+      block.txs = txs.map(tx => tx.hash);        
 
-        await insertTransactions(txs);
-        await insertBlock(block);
-
-        outputBlock = _.merge(block, {
-          transactions: txs
-        });
-      } catch (e) {
-        outputError = e;
-      }
+      await insertTransactions(txs);
+      await insertBlock(block);
 
       sem.leave();                
-      await afterSave(outputError, null);
-      outputError ? rej(outputError) : res(outputBlock);
-    });
+      await afterSave(null);
+      res(_.merge(block, {
+        transactions: txs
+      }));
+      
+    } catch (e) {
+      sem.leave();                
+      await afterSave(e, null);
+      rej(e);
+    }
   });
 };
 
