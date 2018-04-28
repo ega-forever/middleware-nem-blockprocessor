@@ -131,25 +131,27 @@ const createTransactions = async (txs, blockNumber) => {
  **/
 const saveBlock = async (inputBlock, inputTxs, afterSave = () => {}) => {
   return await new Promise(async (res, rej) => {
-    try {
-      const block = createBlock(inputBlock);
-      const txs = await createTransactions(inputTxs, block.height);
-      block.txs = txs.map(tx => tx.hash);        
+    sem.take(async () => {
+      try {
+        const block = createBlock(inputBlock);
+        const txs = await createTransactions(inputTxs, block.height);
+        block.txs = txs.map(tx => tx.hash);        
 
-      await insertTransactions(txs);
-      await insertBlock(block);
+        await insertTransactions(txs);
+        await insertBlock(block);
 
-      sem.leave();                
-      await afterSave(null);
-      res(_.merge(block, {
-        transactions: txs
-      }));
-      
-    } catch (e) {
-      sem.leave();                
-      await afterSave(e, null);
-      rej(e);
-    }
+        await afterSave(null);
+        res(_.merge(block, {
+          transactions: txs
+        }));
+        sem.leave();      
+        
+      } catch (e) {
+        sem.leave();                
+        await afterSave(e, null);
+        rej(e);
+      }
+    });
   });
 };
 

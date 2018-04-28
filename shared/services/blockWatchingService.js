@@ -134,7 +134,7 @@ class blockWatchingService {
 
   async processBlock () {
     let block = await this.getNewBlock(this.currentHeight+1);
-    if (!block || block.hash === undefined)  
+    if (!block || block.hash === undefined || block.number === null)  
       return Promise.reject({code: 0});
     
 
