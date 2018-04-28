@@ -83,8 +83,9 @@ const createInstance = (providerService) => {
         height: (height > 1 ? height : 1)
       }).catch(() => {});
 
-      if (!block.height) 
+      if (!block || !block.height) 
         return {};
+      
       return this.createBlock(block); 
     },
 
