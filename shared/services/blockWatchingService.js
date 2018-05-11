@@ -81,6 +81,7 @@ class blockWatchingService {
           if (err) {
             await this.repo.removeBlocksForNumbers(blockFromRequest.number, this.consensusAmount);
             await this.repo.removeTxsForNumbers(blockFromRequest.number);
+            log.error(err);
             log.info(`wrong sync state!, rollback to ${blockFromRequest.number - this.consensusAmount - 1} block`);
           }
         });
@@ -111,6 +112,8 @@ class blockWatchingService {
 
         if (![0, 1, 2, -32600].includes(_.get(err, 'code')))
           log.error(err);
+
+        log.error(err);
 
       }
     
