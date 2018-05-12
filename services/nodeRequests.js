@@ -40,7 +40,6 @@ const getHeightForProvider = async (providerUri) => {
     get(createUrl(providerUri, '/chain/height'))
       .then(res)
       .catch(e => {
-        log.error(e);
         res({});
       });
   }).timeout(10000).catch(()=> {});
@@ -92,7 +91,6 @@ const createInstance = (providerService) => {
         })
           .then(res)
           .catch(e => {
-            log.error(e);
             res({});
           });
       }).timeout(10000).catch(()=> {});
@@ -107,8 +105,9 @@ const createInstance = (providerService) => {
      * @return {Promise return Number}
      */
     async getLastBlockNumber () {
+      await providerService.selectProvider();
       const provider = await providerService.getProvider();
-      return await getHeightForProvider(provider.getHttp());
+      return provider.getHeight();
     },
     
     

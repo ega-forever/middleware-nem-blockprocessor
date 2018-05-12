@@ -113,11 +113,7 @@ class blockWatchingService {
         if (![0, 1, 2, -32600].includes(_.get(err, 'code')))
           log.error(err);
 
-        log.error(err);
-
       }
-    
-
   }
 
   async UnconfirmedTxEvent (tx) {
