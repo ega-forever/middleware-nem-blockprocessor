@@ -7,9 +7,7 @@ const request = require('request-promise'),
   _ = require('lodash'),
   {URL} = require('url'),
   Promise = require('bluebird'),
-  hashes = require('./hashes'),
-  bunyan = require('bunyan'),
-  log = bunyan.createLogger({name: 'app.services.nodeRequests'});
+  hashes = require('./hashes');
 
 const EMPTY_HEIGHT = -1;
 
@@ -39,7 +37,7 @@ const getHeightForProvider = async (providerUri) => {
   const res = await new Promise(res => {
     get(createUrl(providerUri, '/chain/height'))
       .then(res)
-      .catch(e => {res({})});
+      .catch(() => {res({});});
   }).timeout(10000).catch(()=> {});
   return _.get(res, 'height', EMPTY_HEIGHT);
 };
@@ -86,7 +84,7 @@ const createInstance = (providerService) => {
       const block = await new Promise(res => {
         post('block/at/public', {height: (height > 1 ? height : 1)})
           .then(res)
-          .catch(e => {res({})});
+          .catch(() => {res({});});
       }).timeout(10000).catch(()=> {});
 
       if (!block || !block.height) 

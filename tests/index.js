@@ -48,12 +48,12 @@ describe('core/block processor', function () {
   });
 
 
-  // it('check for blockHashing -- check that get new block', async () => {
-  //   const block = await blockModel.findOne({}).sort('-number');
-  //   expect(block.number).to.be.greaterThan(0);
-  //   const tx = await txModel.findOne({}).sort('-blockNumber');
-  //   expect(tx.blockNumber).to.be.greaterThan(0);
-  // });
+  it('check for blockHashing -- check that get new block', async () => {
+    const block = await blockModel.findOne({}).sort('-number');
+    expect(block.number).to.be.greaterThan(0);
+    const tx = await txModel.findOne({}).sort('-blockNumber');
+    expect(tx.blockNumber).to.be.greaterThan(0);
+  });
 
 
 
@@ -110,7 +110,6 @@ describe('core/block processor', function () {
           if (tx.code === 5) 
             throw new Error('Account has not balance');
         }
-        console.log(tx);
       })(),
       (async () => {
         return await consumeMessages(1, channel, (message) => {
@@ -142,7 +141,7 @@ describe('core/block processor', function () {
 
   it('delete accounts and send transfer transaction and after delay 0 messages', async () => {
     await accountModel.remove();
-    tx =await createTransaction(accounts[1], 0.000001, config.dev.privateKey);
+    let tx =await createTransaction(accounts[1], 0.000001, config.dev.privateKey);
     if (tx.code === 5) {
       tx =await createTransaction(accounts[0], 0.000001, config.dev.privateKeyTwo);          
       if (tx.code === 5) 

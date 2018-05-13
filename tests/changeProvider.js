@@ -4,41 +4,32 @@
 * @author Kirill Sergeev <cloudkserg11@gmail.com>
 */
 const mongoose = require('mongoose'),
- Promise = require('bluebird'),
- config = require('./config');
+  Promise = require('bluebird'),
+  config = require('./config');
 
 mongoose.Promise = Promise; // Use custom Promises
 mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
 mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 
 const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
-  connectToQueue = require('./helpers/connectToQueue'),
   clearQueues = require('./helpers/clearQueues'),
-  consumeMessages = require('./helpers/consumeMessages'),
   createTransaction = require('./helpers/createTransaction'),
-  consumeStompMessages = require('./helpers/consumeStompMessages'),
-  blockModel = require('../models/blockModel'),
-  txModel = require('../models/txModel'),
-  accountModel = require('../models/accountModel'),
-  WebSocket = require('ws'),
-  findProcess = require('find-process');
-  expect = require('chai').expect,
+  findProcess = require('find-process'),
   amqp = require('amqplib'),
-  PROVIDER_CHECK_QUEUE = `${config.rabbit.serviceName}_provider_check`,
-  Stomp = require('webstomp-client');
+  PROVIDER_CHECK_QUEUE = `${config.rabbit.serviceName}_provider_check`;
 
 let amqpInstance,  accounts = config.dev.accounts;
 
 describe('core/block processor -  change provider', function () {
 
 
-  before(async () => {
+  before (async () => {
     await saveAccountForAddress(accounts[0]);
     amqpInstance = await amqp.connect(config.rabbit.url);
     await clearQueues(amqpInstance, PROVIDER_CHECK_QUEUE);
   });
 
-  after(async () => {
+  after (async () => {
     await amqpInstance.close();
     await mongoose.disconnect();
   });
@@ -122,11 +113,11 @@ describe('core/block processor -  change provider', function () {
             if (message.content.toString() === '2') {
               await channel.cancel(message.fields.consumerTag);
               res();  
-             }
+            }
           }, {noAck: true});
         });
       })()
-    ])
+    ]);
   });
 
   it('check what provider main', async () => {
@@ -146,10 +137,8 @@ describe('core/block processor -  change provider', function () {
       })(),
       (async () => {
         await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
-        await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
-        await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
       })(),
-    ])
+    ]);
   });
 
 });

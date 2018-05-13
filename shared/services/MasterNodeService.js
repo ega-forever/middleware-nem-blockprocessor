@@ -63,7 +63,7 @@ class MasterNode {
     await this.channel.assertQueue(this._queues.findMasterQueue, {autoDelete: true, durable: false});
     await this.channel.bindQueue(this._queues.findMasterQueue, EXCHANGE_NAME, this._queues.findMasterRoute);
 
-    this.channel.consume(this._queues.findMasterQueue, async (message) => {
+    this.channel.consume(this._queues.findMasterQueue, async () => {
       if (this._isMaster)
         await this._sendSetMasterEvent();
     }, {noAck: true});

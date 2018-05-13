@@ -3,12 +3,10 @@
  * Licensed under the AGPL Version 3 license.
  * @author Kirill Sergeev <cloudkserg11@gmail.com>
  */
-const http = require('http'),
-  httpProxy = require('http-proxy'),
-  express = require('express'),
+const httpProxy = require('http-proxy'),
   config = require('../config'),
   bunyan = require('bunyan'),
-  log = bunyan.createLogger({name: 'app.proxy'});
+  log = bunyan.createLogger({name: 'app.proxy'}),
   amqp = require('amqplib');
 
 // create a server
@@ -32,13 +30,13 @@ const portWs = process.argv[3];
 
 var proxy = httpProxy.createProxyServer({ target: provider.http})
   .listen(port);
-proxy.on('proxyReq', async function (proxyReq, req) {
+proxy.on('proxyReq', async function () {
   await sendMessage(port);
 });
 
 
 var proxyWs = httpProxy.createProxyServer({ target: provider.ws, ws: true })
   .listen(portWs);
-proxyWs.on('proxyRes', async function (proxyReq, req, res) {
+proxyWs.on('proxyRes', async function () {
   await sendMessage(portWs);
 });

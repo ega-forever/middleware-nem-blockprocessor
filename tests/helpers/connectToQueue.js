@@ -8,6 +8,5 @@ const config = require('../../config');
 module.exports = async (channel, queueName = `${config.rabbit.serviceName}_test.transaction`) => {
   const balanceQueue = await channel.assertQueue(queueName, {autoDelete: true, durable: false});
   await channel.bindQueue(queueName, 'events', `${config.rabbit.serviceName}_transaction.*`);
-  console.log(queueName);
   return balanceQueue;
 };

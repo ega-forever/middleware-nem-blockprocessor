@@ -27,7 +27,7 @@ module.exports = class {
    * @returns {Number}
    * 
    */
-  getKey() {
+  getKey () {
     return this._key;
   }
 

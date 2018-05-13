@@ -79,7 +79,6 @@ class ProviderService {
 
   async getEnableProvidersWithNewHeights () {
     const providers = await Promise.map(this.getEnableConfigProviders(), this.createProviderWithHeight.bind(this));
-    console.log(providers);
     return _.filter(
       providers,
       provider => provider.getHeight() > 0

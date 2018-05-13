@@ -30,7 +30,7 @@ module.exports = async function (requests, repo, startIndex, consensusAmount) {
   const missedBlocks = [];
 
   for (let blockNumberChunk of blockNumberChunks) {
-    //log.info(`validating blocks from: ${_.head(blockNumberChunk)} to ${_.last(blockNumberChunk)}`);
+    log.info(`validating blocks from: ${_.head(blockNumberChunk)} to ${_.last(blockNumberChunk)}`);
     const count = await repo.countBlocksForNumbers(blockNumberChunk);
     
     if (count !== blockNumberChunk.length && count)
@@ -43,7 +43,7 @@ module.exports = async function (requests, repo, startIndex, consensusAmount) {
   for (let missedBucket of missedBuckets)
     if (missedBucket.length)
       for (let blockNumber of missedBucket) {
-        //log.info(`validating block: ${blockNumber}`);
+        log.info(`validating block: ${blockNumber}`);
         const isExist = await repo.countBlocksForNumbers([blockNumber]);
         if (!isExist)
           missedBlocks.push(blockNumber);

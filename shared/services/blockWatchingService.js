@@ -129,7 +129,6 @@ class blockWatchingService {
 
   async getNewBlock (number) {
     const maxHeight = await this.requests.getLastBlockNumber();
-    console.log('NUMBER', number, 'MAX', maxHeight);
     if (number > maxHeight)
       return {};
     
