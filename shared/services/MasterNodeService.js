@@ -12,7 +12,7 @@ const MASTER_UPDATE_TIMEOUT = 2000;
 const MASTER_FIND_TIMEOUT = 2000;
 const MASTER_SYNC_TIMEOUT = 2000;
 
-const EXCHANGE_NAME = 'master_events';
+const EXCHANGE_NAME = 'events';
 
 /**
  * @class MasterNode
@@ -37,11 +37,11 @@ class MasterNode {
    * not done anything work
    *
    * @param {AmqpClient} _channel [from amqplib] _channel Channel, through send and response messages
-   * @param {String} rabbitPrefix config.rabbit.serviceName | 'app_eth'
+   * @param {String} rabbitPrefix config.rabbit.serviceName | 'eth'
    *
    * @memberOf MasterNode
    */
-  constructor (_channel, rabbitPrefix) {
+  constructor (channel, rabbitPrefix) {
     this._myid = uniqid();
     this._queues = {
       findMasterQueue: `${rabbitPrefix}_findMaster_${this._myid}`,
@@ -50,7 +50,7 @@ class MasterNode {
       setMasterRoute: `${rabbitPrefix}_setMaster`
     };
 
-    this.channel = _channel;
+    this.channel = channel;
     this._isMaster = false;
     this._currentMaster = undefined;
   }
@@ -61,26 +61,22 @@ class MasterNode {
 
   async _onFindMasterEvent () {
     await this.channel.assertQueue(this._queues.findMasterQueue, {autoDelete: true, durable: false});
-    await this.channel.bindQueue(this._queues.findMasterQueue, EXCHANGE_NAME, this._queues.findMasterRoute, {autoDelete: true, durable: false});
+    await this.channel.bindQueue(this._queues.findMasterQueue, EXCHANGE_NAME, this._queues.findMasterRoute);
 
     this.channel.consume(this._queues.findMasterQueue, async (message) => {
       if (this._isMaster)
         await this._sendSetMasterEvent();
-
-      this.channel.ack(message);
-    });
+    }, {noAck: true});
   }
 
   async _onSetMasterEvent () {
     await this.channel.assertQueue(this._queues.setMasterQueue, {autoDelete: true, durable: false});
-    await this.channel.bindQueue(this._queues.setMasterQueue, EXCHANGE_NAME, this._queues.setMasterRoute, {autoDelete: true, durable:false});
+    await this.channel.bindQueue(this._queues.setMasterQueue, EXCHANGE_NAME, this._queues.setMasterRoute);
 
     this.channel.consume(this._queues.setMasterQueue, async (message) => {
       this._currentMaster = message.content.toString();
       this._isMaster = (this._currentMaster === this._myid);
-
-      this.channel.ack(message);
-    });
+    }, {noAck: true});
   }
 
   async _sendFindMasterEvent () {
@@ -119,7 +115,6 @@ class MasterNode {
    * @memberOf MasterNode
    */
   async start () {
-    await this.channel.assertExchange(EXCHANGE_NAME, 'direct', {autoDelete: true});
     this._onSetMasterEvent();
     this._onFindMasterEvent();
     await Promise.delay(MASTER_UPDATE_TIMEOUT);

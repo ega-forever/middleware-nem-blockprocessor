@@ -19,22 +19,20 @@ if (!process.argv[2] || !process.argv[3]) {
     process.exit(0);
 }
 
-const port = process.argv[2];
-const portWs = process.argv[3];
-
-var proxy = httpProxy.createProxyServer({ target: provider.http})
-    .listen(port);
-
-
 const sendMessage = async (message) => {
     const amqpInstance = await amqp.connect(config.rabbit.url);
     const channel = await amqpInstance.createChannel();  
 
     await channel.assertExchange('events', 'topic', {durable: false});
-    channel.publish('events', `${config.rabbit.serviceName}_test.check`, new Buffer(message));
+    channel.publish('events', `${config.rabbit.serviceName}_provider_check`, new Buffer(message));
 };
 
 
+const port = process.argv[2];
+const portWs = process.argv[3];
+
+var proxy = httpProxy.createProxyServer({ target: provider.http})
+    .listen(port);
 proxy.on('proxyReq', function (proxyReq, req) {
     sendMessage(port);
 });
@@ -42,7 +40,6 @@ proxy.on('proxyReq', function (proxyReq, req) {
 
 var proxyWs = httpProxy.createProxyServer({ target: provider.ws, ws: true })
     .listen(portWs);
-
 proxy.on('proxyReq', function (proxyReq, req) {
     sendMessage(portWs);
 });

@@ -5,8 +5,8 @@
 */
 const config = require('../../config');
 
-module.exports = async (amqpInstance) => {
+module.exports = async (amqpInstance, queueName = `app_${config.rabbit.serviceName}_test.transaction`) => {
   const channel = await amqpInstance.createChannel();
-  channel.assertQueue(`app_${config.rabbit.serviceName}_test.transaction`);
-  return await channel.purgeQueue(`app_${config.rabbit.serviceName}_test.transaction`);
+  channel.assertQueue(queueName);
+  return await channel.purgeQueue(queueName);
 };

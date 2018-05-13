@@ -25,6 +25,7 @@ const _ = require('lodash'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
 
   MasterNodeService = require('./shared/services/MasterNodeService'), 
+  ProviderNodeService = require('./shared/services/ProviderNodeService'), 
   BlockWatchingService = require('./shared/services/blockWatchingService'),
   SyncCacheService = require('./shared/services/syncCacheService'),
   ProviderService = require('./shared/services/providerService'),
@@ -79,7 +80,10 @@ const init = async () => {
   await masterNodeService.start();
 
   const providerService = new ProviderService(config.node.providers, requests.getHeightForProvider);
+  const providerNodeService = new ProviderNodeService(channel, providerService, config.rabbit.serviceName);
+  await providerNodeService.start();
   await providerService.selectProvider();
+  
 
   const listener = new NodeListenerService(providerService);
   await listener.selectClient();

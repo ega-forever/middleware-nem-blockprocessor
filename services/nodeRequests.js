@@ -39,9 +39,7 @@ const getHeightForProvider = async (providerUri) => {
   const res = await new Promise(res => {
     get(createUrl(providerUri, '/chain/height'))
       .then(res)
-      .catch(e => {
-        res({});
-      });
+      .catch(e => {res({})});
   }).timeout(10000).catch(()=> {});
   return _.get(res, 'height', EMPTY_HEIGHT);
 };
@@ -86,13 +84,9 @@ const createInstance = (providerService) => {
      */
     async getBlockByNumber (height) {
       const block = await new Promise(res => {
-        post('block/at/public', {
-          height: (height > 1 ? height : 1)
-        })
+        post('block/at/public', {height: (height > 1 ? height : 1)})
           .then(res)
-          .catch(e => {
-            res({});
-          });
+          .catch(e => {res({})});
       }).timeout(10000).catch(()=> {});
 
       if (!block || !block.height) 
@@ -106,8 +100,7 @@ const createInstance = (providerService) => {
      */
     async getLastBlockNumber () {
       await providerService.selectProvider();
-      const provider = await providerService.getProvider();
-      return provider.getHeight();
+      return (await providerService.getProvider()).getHeight();
     },
     
     

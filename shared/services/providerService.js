@@ -82,13 +82,9 @@ class ProviderService {
     );
   }
 
-  async createProviderWithHeight (configProvider) {
+  async createProviderWithHeight (configProvider, key) {
     const height = await this.getHeightForProvider(configProvider.http).catch(() => -1);
-    return this.createProvider(configProvider, height);
-  }
-
-  createProvider (configProvider, height = MIN_HEIGHT) {
-    return new Provider(configProvider.ws, configProvider.http, height);
+    return new Provider(key, configProvider.ws, configProvider.http, height || MIN_HEIGHT);
   }
 
   isNewProvider (provider) {
