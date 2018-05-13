@@ -59,6 +59,8 @@ class ProviderService {
     const maxProvider = _.maxBy(providers, provider => provider.getHeight());
     if (this.isNewProvider(maxProvider))  
       this.replaceProvider(maxProvider);
+    else
+      this._provider = maxProvider;
   }
 
 
@@ -76,8 +78,10 @@ class ProviderService {
   }
 
   async getEnableProvidersWithNewHeights () {
+    const providers = await Promise.map(this.getEnableConfigProviders(), this.createProviderWithHeight.bind(this));
+    console.log(providers);
     return _.filter(
-      await Promise.map(this.getEnableConfigProviders(), this.createProviderWithHeight.bind(this)),
+      providers,
       provider => provider.getHeight() > 0
     );
   }
@@ -88,7 +92,7 @@ class ProviderService {
   }
 
   isNewProvider (provider) {
-    return (this._provider === undefined || provider.getHeight() !== this._provider.getHeight());
+    return (this._provider === undefined || provider.getKey() !== this._provider.getKey());
   }
 
   replaceProvider (provider) {

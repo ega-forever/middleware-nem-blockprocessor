@@ -129,10 +129,12 @@ class blockWatchingService {
 
   async getNewBlock (number) {
     const maxHeight = await this.requests.getLastBlockNumber();
+    console.log('NUMBER', number, 'MAX', maxHeight);
     if (number > maxHeight)
       return {};
-      
-    return await this.requests.getBlockByNumber(number).catch(() => {});
+    
+    const block = await this.requests.getBlockByNumber(number).catch(() => {});
+    return block;
   }
 
   async processBlock () {

@@ -14,6 +14,7 @@ mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   connectToQueue = require('./helpers/connectToQueue'),
   clearQueues = require('./helpers/clearQueues'),
+  _ = require('lodash'),
   consumeMessages = require('./helpers/consumeMessages'),
   createTransaction = require('./helpers/createTransaction'),
   consumeStompMessages = require('./helpers/consumeStompMessages'),
@@ -47,18 +48,18 @@ describe('core/block processor', function () {
   });
 
 
-  it('check for blockHashing -- check that get new block', async () => {
-    await Promise.delay(5000);
-    const block = await blockModel.findOne({}).sort('-number');
-    expect(block.number).to.be.greaterThan(0);
-    const tx = await txModel.findOne({}).sort('-blockNumber');
-    expect(tx.blockNumber).to.be.greaterThan(0);
-  });
+  // it('check for blockHashing -- check that get new block', async () => {
+  //   const block = await blockModel.findOne({}).sort('-number');
+  //   expect(block.number).to.be.greaterThan(0);
+  //   const tx = await txModel.findOne({}).sort('-blockNumber');
+  //   expect(tx.blockNumber).to.be.greaterThan(0);
+  // });
 
 
 
   it('send some nem from account0 to account1 and validate messages and db', async () => {
-
+    const channel = await amqpInstance.createChannel();  
+    await connectToQueue(channel);
 
     const checkMessage = function (content) {
       expect(content).to.contain.all.keys(
@@ -98,18 +99,20 @@ describe('core/block processor', function () {
       expect(tx.recipient).to.equal(transaction.recipient);
       return true;
     };
+
     let tx;
 
     return await Promise.all([
       (async () => {
-        tx =await createTransaction(accounts[1], 0.000001);
-        if (tx.code === 5) 
-          throw new Error('Account has not balance');
-        
+        tx =await createTransaction(accounts[1], 0.000001, config.dev.privateKey);
+        if (tx.code === 5) {
+          tx =await createTransaction(accounts[0], 0.000001, config.dev.privateKeyTwo);          
+          if (tx.code === 5) 
+            throw new Error('Account has not balance');
+        }
+        console.log(tx);
       })(),
       (async () => {
-        const channel = await amqpInstance.createChannel();  
-        await connectToQueue(channel);
         return await consumeMessages(1, channel, (message) => {
           const content = JSON.parse(message.content);
           if (tx.timeStamp && content.timeStamp === tx.timeStamp) {
@@ -139,9 +142,12 @@ describe('core/block processor', function () {
 
   it('delete accounts and send transfer transaction and after delay 0 messages', async () => {
     await accountModel.remove();
-    let tx =await createTransaction(accounts[0], 0.000001);
-    if (tx.code === 5) 
-      throw new Error('Account has not balance');
+    tx =await createTransaction(accounts[1], 0.000001, config.dev.privateKey);
+    if (tx.code === 5) {
+      tx =await createTransaction(accounts[0], 0.000001, config.dev.privateKeyTwo);          
+      if (tx.code === 5) 
+        throw new Error('Account has not balance');
+    }
     
     await Promise.delay(8000);
     const channel = await amqpInstance.createChannel();  

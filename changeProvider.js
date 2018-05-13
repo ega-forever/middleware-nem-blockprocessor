@@ -48,8 +48,12 @@ describe('core/block processor -  change provider', function () {
   });
 
 
-  it('send some nem and check provider 8010', async () => {
+  it('send nem and check that operation through provider 8010 (get from rabbitmq message 8010 and 8011)', async () => {
     let tx;
+    const channel = await amqpInstance.createChannel();      
+    await channel.assertQueue(PROVIDER_CHECK_QUEUE, {autoDelete: true, durable: false});
+    await channel.bindQueue(PROVIDER_CHECK_QUEUE, 'events', PROVIDER_CHECK_QUEUE);
+    
     return await Promise.all([
       (async () => {
         tx = await createTransaction(accounts[1], 0.000001);
@@ -58,62 +62,61 @@ describe('core/block processor -  change provider', function () {
         
       })(),
       (async () => {
-        const channel = await amqpInstance.createChannel();  
-        await channel.assertQueue(PROVIDER_CHECK_QUEUE, {autoDelete: true, durable: false});
-        await channel.bindQueue(PROVIDER_CHECK_QUEUE, 'events', PROVIDER_CHECK_QUEUE);
         return new Promise(res => {
           let get8010 =false, get8011 =false;
           channel.consume(PROVIDER_CHECK_QUEUE, async (message) => {
-            const content = JSON.parse(message.content);
-            if (message.content === 8010) 
+            const content = message.content.toString();
+            if (content === '8010') 
               get8010 =true;
-            if (message.content === 8011) 
+            if (content === '8011') 
               get8011 =true;
             if (get8010 || get8011) {
-               await channel.cancel(message.fields.consumerTag);
+              await channel.cancel(message.fields.consumerTag);
               res();
-             }
+            }
           }, {noAck: true});
         });
       })()
     ]);
   });
 
-  it('send some nem and check provider 8020', async () => {
+  it('kill provider 8010 and check that provider 8020', async () => {
 
     const processInfo = await findProcess('port', 8010);
     process.kill(processInfo[0].pid, 'SIGKILL');
     await Promise.delay(3000);
 
     const channel = await amqpInstance.createChannel();  
-    await channel.assertQueue(PROVIDER_CHECK_QUEUE, {durable: false, autoDelete: true});
+    await channel.assertQueue(PROVIDER_CHECK_QUEUE, {autoDelete: true, durable: false});
     await channel.bindQueue(PROVIDER_CHECK_QUEUE, 'events', PROVIDER_CHECK_QUEUE);
     
     await new Promise(res => {
       let get8020 =false, get8021 =false;
       channel.consume(PROVIDER_CHECK_QUEUE, async (message) => {
-        if (message.content === 8020) 
-          get8020 =true;
-        if (message.content === 8021) 
-          get8021 =true;
-            if (get8020 || get8021) {
-               await channel.cancel(message.fields.consumerTag);
-              res();
-             }
+        const content = message.content.toString();
+        if (content === '8020') 
+          get8020 = true;
+        if (content === '8021') 
+          get8021 = true;
+        if (get8020 || get8021) {
+          await channel.cancel(message.fields.consumerTag);
+          res();
+        }
       }, {noAck: true});
     });
   });
 
   it('check provider main', async () => {
     const channel = await amqpInstance.createChannel();  
-    await Promise.map([
+    await channel.assertQueue(`${config.rabbit.serviceName}_test1_provider`, {autoDelete: true, durable: false});
+    await channel.bindQueue(`${config.rabbit.serviceName}_test1_provider`, 'events', `${config.rabbit.serviceName}_provider`);
+    
+    await Promise.all([
       (async () => {
         const processInfo = await findProcess('port', 8020);
         process.kill(processInfo[0].pid, 'SIGKILL');
       })(),
       (async () => {
-        await channel.assertQueue(`${config.rabbit.serviceName}_test1_provider`, {autoDelete: true});
-        await channel.bindQueue(`${config.rabbit.serviceName}_test1_provider`, 'events', `${config.rabbit.serviceName}_provider`);
         await new Promise(res => {
           channel.consume(`${config.rabbit.serviceName}_test1_provider`, async (message) => {
             if (message.content.toString() === '2') {
@@ -127,15 +130,11 @@ describe('core/block processor -  change provider', function () {
   });
 
   it('check what provider main', async () => {
-    const channel = await amqpInstance.createChannel();  
+    const channel = await amqpInstance.createChannel(); 
+    await channel.assertQueue(`${config.rabbit.serviceName}_test_provider`, {autoDelete: true, durable: false});
+    await channel.bindQueue(`${config.rabbit.serviceName}_test_provider`, 'events', `${config.rabbit.serviceName}_provider`);
     await Promise.all([
       (async () => {
-        await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
-      })(),
-      (async () => {
-        await channel.assertQueue(`${config.rabbit.serviceName}_test_provider`, {autoDelete: true});
-        await channel.bindQueue(`${config.rabbit.serviceName}_test_provider`, 'events', `${config.rabbit.serviceName}_provider`);
-        
         await new Promise(res => {
           channel.consume(`${config.rabbit.serviceName}_test_provider`, async (message) => {
             if (message.content.toString() === '2') {
@@ -144,7 +143,12 @@ describe('core/block processor -  change provider', function () {
             }
           }, {noAck: true});
         });
-      })()
+      })(),
+      (async () => {
+        await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
+        await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
+        await channel.publish('events', `${config.rabbit.serviceName}_what_provider`, new Buffer('what'));
+      })(),
     ])
   });
 

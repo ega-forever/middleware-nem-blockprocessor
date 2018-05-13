@@ -7,13 +7,13 @@ const config = require('../config'),
   nem = require('nem-sdk').default;
 
 
-module.exports = async (accountTo, sum) => {
+module.exports = async (accountTo, sum, privateKey ) => {
   // Create an NIS endpoint object
   const servArr = config.dev.httpForTransaction.split(/:/);
   const endpoint = nem.model.objects.create('endpoint')(
     servArr[0] + ':' + servArr[1], servArr[2]
   );
-  const common = nem.model.objects.create('common')('',  config.dev.privateKey);
+  const common = nem.model.objects.create('common')('',  privateKey);
 
   // Create an un-prepared transfer transaction object
   const transferTransaction = nem.model.objects.create('transferTransaction')(accountTo, sum, 'Hello');

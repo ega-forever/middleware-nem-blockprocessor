@@ -63,15 +63,18 @@ const init = async () => {
 
 
   let blockEventCallback = async block => {
-    log.info(`${block.hash} (${block.number}) added to cache.`);
+    //log.info(`${block.hash} (${block.number}) added to cache.`);
     let filtered = await filterTxsByAccountsService(block.transactions);
+    if (filtered.length > 0)
+      console.log('LLLLLLLLLLLLLLLLLL', filtered.length, block.transactions);
     await Promise.all(filtered.map(item =>
       channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
     ));
   };
   let txEventCallback = async tx => {
     let filtered = await filterTxsByAccountsService([tx]);
-    await Promise.all(filtered.map(item =>
+    console.log('SSSSSSSSSSSSSSSSS', filtered.length, tx.id);
+    await Promise.all(filtered.map(item => 
       channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
     ));
   };

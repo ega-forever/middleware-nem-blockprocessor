@@ -100,7 +100,8 @@ const createInstance = (providerService) => {
      */
     async getLastBlockNumber () {
       await providerService.selectProvider();
-      return (await providerService.getProvider()).getHeight();
+      const provider = await providerService.getProvider();
+      return provider.getHeight();
     },
     
     
