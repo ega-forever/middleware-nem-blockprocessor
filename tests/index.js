@@ -34,6 +34,7 @@ describe('core/block processor', function () {
 
   before(async () => {
     console.log('1');
+    console.log('5555', accounts[0]);
     await saveAccountForAddress(accounts[0]);
     console.log('2');
     amqpInstance = await amqp.connect(config.rabbit.url);
