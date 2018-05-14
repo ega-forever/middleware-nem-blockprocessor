@@ -59,7 +59,7 @@ class NodeListenerService {
 
   createStompClient (uri, onError) {
     const ws = new SockJS(`${uri}/w/messages`);
-    const client =  Stomp.over(ws, {heartbeat: true, debug: true});
+    const client =  Stomp.over(ws, {heartbeat: true, debug: false});
     
     ws.onclose = async () => {
       await onError();
