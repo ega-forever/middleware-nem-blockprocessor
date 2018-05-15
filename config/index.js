@@ -15,6 +15,19 @@ const getDefault = () => {
   );
 };
 
+const createConfigProviders = (providers) => {
+  return _.chain(providers)
+    .split(',')
+    .map(provider => {
+      const data = provider.split('@');
+      return {
+        http: data[0].trim(),
+        ws: data[1].trim()
+      };
+    })
+    .value();
+};
+
 const config = {
   mongo: {
     accounts: {
@@ -32,16 +45,7 @@ const config = {
   node: {
     network: parseInt(process.env.NETWORK) || -104,
     networkName: process.env.NETWORK_NAME || 'testnet',
-    providers: _.chain(process.env.PROVIDERS || getDefault())
-      .split(',')
-      .map(provider => {
-        const data = provider.split('@');
-        return {
-          http: data[0].trim(),
-          ws: data[1].trim()
-        };
-      })
-      .value()
+    providers: createConfigProviders(process.env.PROVIDERS || getDefault())
   },
   consensus: {
     lastBlocksValidateAmount: parseInt(process.env.CONSENSUS_BLOCK_VALIDATE_AMOUNT) || 10

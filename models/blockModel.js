@@ -19,6 +19,7 @@ const Block = new mongoose.Schema({
   signature: {type: String},
   version: {type: Number},
   signer: {type: String},
+  txs: [{type: String}],
   prevBlockHash: {data: {type: String}}  
 });
 
