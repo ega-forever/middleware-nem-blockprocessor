@@ -33,21 +33,14 @@ describe('core/block processor', function () {
 
 
   before(async () => {
-    console.log('1');
     await saveAccountForAddress(accounts[0]);
-    console.log('2');
     amqpInstance = await amqp.connect(config.rabbit.url);
-    console.log('3');
     await clearQueues(amqpInstance);
-    console.log('4');
   });
 
   after(async () => {
-    console.log('21');
     await amqpInstance.close();
-    console.log('22');
     await mongoose.disconnect();
-    console.log('23');
   });
 
   afterEach(async () => {
