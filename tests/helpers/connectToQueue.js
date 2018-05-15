@@ -5,9 +5,8 @@
 */
 const config = require('../../config');
 
-module.exports = async (channel) => {
-  await channel.assertExchange('events', 'topic', {durable: false});
-  const balanceQueue = await channel.assertQueue(`app_${config.rabbit.serviceName}_test.transaction`);
-  await channel.bindQueue(`app_${config.rabbit.serviceName}_test.transaction`, 'events', `${config.rabbit.serviceName}_transaction.*`);
+module.exports = async (channel, queueName = `${config.rabbit.serviceName}_test.transaction`) => {
+  const balanceQueue = await channel.assertQueue(queueName, {autoDelete: true, durable: false});
+  await channel.bindQueue(queueName, 'events', `${config.rabbit.serviceName}_transaction.*`);
   return balanceQueue;
 };

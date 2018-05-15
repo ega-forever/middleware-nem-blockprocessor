@@ -81,6 +81,7 @@ class blockWatchingService {
           if (err) {
             await this.repo.removeBlocksForNumbers(blockFromRequest.number, this.consensusAmount);
             await this.repo.removeTxsForNumbers(blockFromRequest.number);
+            log.error(err);
             log.info(`wrong sync state!, rollback to ${blockFromRequest.number - this.consensusAmount - 1} block`);
           }
         });
@@ -113,8 +114,6 @@ class blockWatchingService {
           log.error(err);
 
       }
-    
-
   }
 
   async UnconfirmedTxEvent (tx) {
@@ -129,12 +128,17 @@ class blockWatchingService {
 
 
   async getNewBlock (number) {
-    return await this.requests.getBlockByNumber(number).catch(() => {});
+    const maxHeight = await this.requests.getLastBlockNumber();
+    if (number > maxHeight)
+      return {};
+    
+    const block = await this.requests.getBlockByNumber(number).catch(() => {});
+    return block;
   }
 
   async processBlock () {
     let block = await this.getNewBlock(this.currentHeight+1);
-    if (!block || block.hash === undefined)  
+    if (!block || block.hash === undefined || block.number === null)  
       return Promise.reject({code: 0});
     
 
