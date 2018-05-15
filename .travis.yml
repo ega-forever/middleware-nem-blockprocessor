@@ -20,8 +20,9 @@ install:
   - npm install -g pm2
 
 before_script:
-    - echo NIS=http://192.3.61.243:7890 > .env
-    - echo WEBSOCKET_NIS=http://192.3.61.243:7778 >> .env
+    - echo PROVIDERS=http://localhost:8010@http://localhost:8011,http://localhost:8020@http://localhost:8021,http://192.3.61.243:7890@http://192.3.61.243:7778 >> .env
+    - sleep 10 && node $TRAVIS_BUILD_DIR/tests/proxy/server.js  8010 8011 --name 'proxy1' &
+    - sleep 10 && node $TRAVIS_BUILD_DIR/tests/proxy/server.js  8020 8021 --name 'proxy2' &
     - sleep 30 && pm2 start index.js
 
 script:

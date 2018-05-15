@@ -8,15 +8,27 @@
 module.exports = class {
   /**
    * 
+   * @param {Number} key
    * @param {String} wsUri 
    * @param {String} httpUri 
    * @param {Number} height 
    */
-  constructor (wsUri, httpUri, height)
+  constructor (key, wsUri, httpUri, height)
   {
+    this._key = key;
     this._ws = wsUri;
     this._http = httpUri;
     this._height = height;
+  }
+
+  /**
+   * 
+   * 
+   * @returns {Number}
+   * 
+   */
+  getKey () {
+    return this._key;
   }
 
   /**

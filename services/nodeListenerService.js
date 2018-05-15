@@ -30,6 +30,32 @@ class NodeListenerService {
     await this.selectClient();
   }
 
+  async selectClient () {
+    const provider = await this.providerService.getProvider(),
+      onError = this.processError.bind(this, provider);
+
+    try{
+      this.client = this.createStompClient(provider.getWs(), onError);
+      await new Promise(
+        (res, rej) => {
+          this.client.connect({}, res, rej);
+        }
+      ).timeout(MAX_WAIT_TIME);
+    } catch(e) {
+      log.error(e);
+      if (onError) await onError();
+      return;   
+    }
+
+    if (this.isSubscribed())
+      this.subscribe();
+  }
+
+  isSubscribed () {
+    return (this.subscribedCallback !== undefined && this.client !== undefined);
+  }
+
+
 
   createStompClient (uri, onError) {
     const ws = new SockJS(`${uri}/w/messages`);
@@ -46,33 +72,19 @@ class NodeListenerService {
   }
 
   async processError (provider) {
-    log.info('error on ws/stomp client, disable currebt provider');
+    log.info('error on ws/stomp client, disable current provider');
     this.providerService.disableProvider(provider);
     await this.providerService.selectProvider();
   }
 
-  async selectClient () {
-    const provider = await this.providerService.getProvider(),
-      onError = this.processError.bind(this, provider);
-
-    try{
-      this.client = this.createStompClient(provider.getWs(), onError);
-      await new Promise((res, rej) => this.client.connect({}, res, rej)).timeout(MAX_WAIT_TIME);
-    } catch(e) {
-      log.error(e);
-      if (onError) await onError();
-      return;   
-    }
-
-    if (this.subscribedCallback !== undefined && this.client !== undefined)
-      this.subscribe();
-  }
 
 
   subscribe () {
-    if (this.client !== undefined)
+    if (this.client !== undefined) 
       this.subscribeUnconfirmedTxId = this.client.subscribe('/unconfirmed', 
-        (message) => this.subscribedCallback(JSON.parse(message.body), message.headers));
+        (message) => {
+          this.subscribedCallback(JSON.parse(message.body), message.headers);
+        });
   }
 
   /**

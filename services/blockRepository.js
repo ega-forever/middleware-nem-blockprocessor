@@ -71,11 +71,13 @@ const saveUnconfirmedTxs = async (inputTxs) => {
 /**
  * 
  * @param {blockModel} block 
+ * @param {Array of Object} txs
  * @return {blockModel} 
  */
-const createBlock = (block) => {
+const createBlock = (block, txHashes = []) => {
   return _.merge(block, {
     number: block.height,
+    txs: txHashes,
     hash: hashes.calculateBlockHash(block),
     timestamp: block.time || Date.now()
   });
@@ -121,31 +123,35 @@ const createTransactions = async (txs, blockNumber) => {
 
 
 /**
- * @param {blockModel} block
+ * @param {blockModel} inputBlock
+ * @param {Array of txModel} inputTxs
  * @param {function return Promise} afterSave
  * @return {Promise return Object {block merge with transactions}}
  * 
  **/
-const saveBlock = async (block, txs, afterSave = () => {}) => {
-  block = createBlock(block);
-
-  await new Promise(async (res) => {
+const saveBlock = async (inputBlock, inputTxs, afterSave = () => {}) => {
+  return await new Promise(async (res, rej) => {
     sem.take(async () => {
       try {
-        txs = await createTransactions(txs, block.height);
+        const block = createBlock(inputBlock);
+        const txs = await createTransactions(inputTxs, block.height);
+        block.txs = txs.map(tx => tx.hash);        
+
         await insertTransactions(txs);
         await insertBlock(block);
-        await afterSave(null);
-      } catch (e) {
-        await afterSave(e, null);
-      }
-      sem.leave();
-      res();
-    });
-  });
 
-  return _.merge(block, {
-    transactions: txs
+        await afterSave(null);
+        res(_.merge(block, {
+          transactions: txs
+        }));
+        sem.leave();      
+        
+      } catch (e) {
+        sem.leave();                
+        await afterSave(e, null);
+        rej(e);
+      }
+    });
   });
 };
 

@@ -25,6 +25,7 @@ const _ = require('lodash'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
 
   MasterNodeService = require('./shared/services/MasterNodeService'), 
+  ProviderNodeService = require('./shared/services/ProviderNodeService'), 
   BlockWatchingService = require('./shared/services/blockWatchingService'),
   SyncCacheService = require('./shared/services/syncCacheService'),
   ProviderService = require('./shared/services/providerService'),
@@ -70,7 +71,7 @@ const init = async () => {
   };
   let txEventCallback = async tx => {
     let filtered = await filterTxsByAccountsService([tx]);
-    await Promise.all(filtered.map(item =>
+    await Promise.all(filtered.map(item => 
       channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
     ));
   };
@@ -79,7 +80,10 @@ const init = async () => {
   await masterNodeService.start();
 
   const providerService = new ProviderService(config.node.providers, requests.getHeightForProvider);
+  const providerNodeService = new ProviderNodeService(channel, providerService, config.rabbit.serviceName);
+  await providerNodeService.start();
   await providerService.selectProvider();
+  
 
   const listener = new NodeListenerService(providerService);
   await listener.selectClient();

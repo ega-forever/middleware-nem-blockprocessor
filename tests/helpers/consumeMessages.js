@@ -4,7 +4,7 @@
 * @author Kirill Sergeev <cloudkserg11@gmail.com>
 */
 const config = require('../../config');
-module.exports = async (maxCount = 1, channel, parseMessage, queueName = `app_${config.rabbit.serviceName}_test.transaction`) => {
+module.exports = async (maxCount = 1, channel, parseMessage, queueName = `${config.rabbit.serviceName}_test.transaction`) => {
   return new Promise(res  => {
     let messageCount = 1;
     channel.consume(queueName, async (message) => {
