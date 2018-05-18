@@ -8,7 +8,6 @@
 */
 
 const _ = require('lodash'),
-  utils = require('../utils'),
   accountModel = require('../models/accountModel');
 
 module.exports = async (txs) => {
@@ -44,7 +43,7 @@ module.exports = async (txs) => {
   return  _.reduce(txs, (acc, tx) => {
     _.each(
       _.intersection(
-        [tx.sender, tx.recipient, utils.toAddress(tx.signer, tx.version >> 24)],
+        [tx.sender, tx.recipient],
         nemAccounts
       ), 
       address => { acc.push(_.merge(tx, { address })); }
