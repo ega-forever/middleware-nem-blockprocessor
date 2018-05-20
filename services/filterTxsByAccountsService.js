@@ -1,11 +1,11 @@
 /**
  * Block processor
  * @module services/blockProcess
- * 
+ *
  * Copyright 2017–2018, LaborX PTY
  * Licensed under the AGPL Version 3 license.
  * @author Kirill Sergeev <cloudkserg11@gmail.com>
-*/
+ */
 
 const _ = require('lodash'),
   accountModel = require('../models/accountModel');
@@ -23,7 +23,7 @@ module.exports = async (txs) => {
     },
     address: {
       $in: _.chain(txs)
-        .map(tx => [tx.sender, tx.recipient])
+        .map(tx => _.compact([tx.sender, tx.recipient, tx.coSigner]))
         .flattenDeep()
         .uniq()
         .value()
@@ -31,23 +31,21 @@ module.exports = async (txs) => {
   };
 
   const accounts = await accountModel.find(query);
-  const nemAccounts = _.map(accounts, a => a.address);  
+  const nemAccounts = _.map(accounts, a => a.address);
   if (_.isEmpty(nemAccounts))
     return [];
-  
 
   /**
    * Filtering for customer's transactions
    * @type {Array}
    */
-  return  _.reduce(txs, (acc, tx) => {
-    _.each(
-      _.intersection(
-        [tx.sender, tx.recipient],
-        nemAccounts
-      ), 
-      address => { acc.push(_.merge(tx, { address })); }
-    );
-    return acc;
+
+  return _.transform(txs, (acc, tx) => {
+
+    _.compact([tx.sender, tx.recipient, tx.coSigner]).forEach(address => {
+      if (nemAccounts.indexOf(address) !== -1)
+        acc.push(_.merge({}, tx, {address}));
+    })
   }, []);
+
 };
