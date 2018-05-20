@@ -16,8 +16,6 @@ const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   clearQueues = require('./helpers/clearQueues'),
   hashes = require('../services/hashes'),
   _ = require('lodash'),
-  requests = require('../services/nodeRequests'),
-  ProviderService = require('../shared/services/providerService'),
   consumeMessages = require('./helpers/consumeMessages'),
   createTransaction = require('./helpers/createTransaction'),
   consumeStompMessages = require('./helpers/consumeStompMessages'),
@@ -30,12 +28,12 @@ const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
 
   Stomp = require('webstomp-client');
 
-let amqpInstance, accounts = config.dev.accounts;
+let amqpInstance;
 
 describe('core/block processor', function () {
 
   before(async () => {
-    await saveAccountForAddress(accounts[0]);
+    await saveAccountForAddress(config.dev.users.Alice.address);
     amqpInstance = await amqp.connect(config.rabbit.url);
     await clearQueues(amqpInstance);
   });
@@ -61,6 +59,8 @@ describe('core/block processor', function () {
     const channel = await amqpInstance.createChannel();
     await connectToQueue(channel);
 
+    let tx;
+
     const checkMessage = function (content) {
       expect(content).to.contain.all.keys(
         'amount',
@@ -70,8 +70,9 @@ describe('core/block processor', function () {
         'messagePayload',
         'blockNumber'
       );
-      expect(content.sender).to.be.equal(accounts[0]);
-      expect(content.recipient).to.be.equal(accounts[1]);
+
+      expect(content.sender).to.be.equal(tx.sender);
+      expect(content.recipient).to.be.equal(tx.recipient);
       expect(content.amount).to.be.equal(1);
       return true;
     };
@@ -92,16 +93,17 @@ describe('core/block processor', function () {
       return true;
     };
 
-    let tx;
 
     return await Promise.all([
       (async () => {
         Promise.delay(5000);
-        tx = await createTransaction(accounts[1], 0.000001, config.dev.privateKey);
-        console.log(tx);
+        tx = await createTransaction(config.dev.users.Bob.address, 0.000001, config.dev.users.Alice.privateKey);
+        tx.sender = config.dev.users.Alice.address;
+        tx.recipient = config.dev.users.Bob.address;
         if (tx.code === 5) {
-          tx = await createTransaction(accounts[0], 0.000001, config.dev.privateKeyTwo);
-          console.log(tx);
+          tx = await createTransaction(config.dev.users.Alice.address, 0.000001, config.dev.users.Bob.privateKey);
+          tx.sender = config.dev.users.Bob.address;
+          tx.recipient = config.dev.users.Alice.address;
           if (tx.code === 5)
             throw new Error('Account has not balance');
         }
@@ -136,9 +138,9 @@ describe('core/block processor', function () {
 
   it('delete accounts and send transfer transaction and after delay 0 messages', async () => {
     await accountModel.remove();
-    let tx = await createTransaction(accounts[1], 0.000001, config.dev.privateKey);
+    let tx = await createTransaction(config.dev.users.Bob.address, 0.000001, config.dev.users.Alice.privateKey);
     if (tx.code === 5) {
-      tx = await createTransaction(accounts[0], 0.000001, config.dev.privateKeyTwo);
+      tx = await createTransaction(config.dev.users.Alice.address, 0.000001, config.dev.users.Bob.privateKey);
       if (tx.code === 5)
         throw new Error('Account has not balance');
     }
