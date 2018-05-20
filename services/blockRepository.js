@@ -40,29 +40,38 @@ const findPrevBlocks = async (depth) => {
   }).sort({number: -1}).limit(depth);
 };
 
-
 const isBlockExist = async (hash) => {
   return (await blockModel.count({hash: hash})) !== 0;
 };
 
 const transformTx = (tx, blockNumber) => {
 
-
-  const sender = !tx.sender && tx.signer ? nem.model.address.toAddress(tx.signer, config.node.network) : tx.sender;
-
-  return {
+  const transformedTx = {
     blockNumber: blockNumber,
     timeStamp: tx.timeStamp,
     amount: tx.amount || null,
     hash: hashes.calculateTransactionHash(tx),
     recipient: tx.recipient,
-    sender: sender,
     fee: tx.fee,
     messagePayload: _.get(tx, 'message.payload', null),
     messageType: _.get(tx, 'message.type', null),
     mosaics: tx.mosaics || null
   };
 
+  if (tx.otherTrans) {
+    transformedTx.coSigner = nem.model.address.toAddress(tx.signer, config.node.network);
+
+    transformedTx.messagePaload = _.get(tx.otherTrans, 'message.payload', null);
+    transformedTx.messageType = _.get(tx.otherTrans, 'message.type', null);
+    transformedTx.amount = transformedTx.amount || null;
+    transformedTx.fee = transformedTx.fee || tx.fee;
+    transformedTx.recipient = tx.otherTrans.recipient;
+    transformedTx.sender = nem.model.address.toAddress(tx.otherTrans.signer, config.node.network);
+  } else {
+    transformedTx.sender = nem.model.address.toAddress(tx.signer, config.node.network);
+  }
+
+  return transformedTx;
 };
 
 /**
