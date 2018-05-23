@@ -3,7 +3,10 @@
  * 
  * @module Chronobank/utils
  * 
- */
+ * Copyright 2017–2018, LaborX PTY
+ * Licensed under the AGPL Version 3 license.
+ * @author Kirill Sergeev <cloudkserg11@gmail.com>
+*/
 
 const CryptoJS = require('crypto-js');
 
@@ -33,13 +36,13 @@ const ua2hex = function ua2hex (ua) {
  * @return {string} - The network prefix
  */
 const id2Prefix = function (id) {
-  if (id === 104) {
+  if (id === 104) 
     return '68';
-  } else if (id === -104) {
+  else if (id === -104) 
     return '98';
-  } else {
+  else 
     return '60';
-  }
+  
 };
 
 /**
@@ -51,9 +54,9 @@ const id2Prefix = function (id) {
 const hex2a = function hex2a (hexx) {
   const hex = hexx.toString();
   let str = '';
-  for (let i = 0; i < hex.length; i += 2) {
+  for (let i = 0; i < hex.length; i += 2) 
     str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
-  }
+  
   return str;
 };
 
@@ -69,9 +72,9 @@ const b32decode = function b32decode (s) {
   let b = new Uint8Array(r);
   for (let j = 0; j < s.length / 8; j++) {
     let v = [0, 0, 0, 0, 0, 0, 0, 0];
-    for (let _i4 = 0; _i4 < 8; ++_i4) {
+    for (let _i4 = 0; _i4 < 8; ++_i4) 
       v[_i4] = alphabet.indexOf(s[j * 8 + _i4]);
-    }
+    
     let i = 0;
     b[j * 5 + 0] = v[i + 0] << 3 | v[i + 1] >> 2;
     b[j * 5 + 1] = (v[i + 1] & 0x3) << 6 | v[i + 2] << 1 | v[i + 3] >> 4;
@@ -94,9 +97,9 @@ const b32encode = function b32encode (s) {
   const leftover = s.length % 5;
 
   if (leftover !== 0) {
-    for (let i = 0; i < 5 - leftover; i++) {
+    for (let i = 0; i < 5 - leftover; i++) 
       s += '\x00';
-    }
+    
     quanta += 1;
   }
 
@@ -114,12 +117,12 @@ const b32encode = function b32encode (s) {
   let replace = 0;
   if (leftover === 1) replace = 6;else if (leftover === 2) replace = 4;else if (leftover === 3) replace = 3;else if (leftover === 4) replace = 1;
 
-  for (let _i2 = 0; _i2 < replace; _i2++) {
+  for (let _i2 = 0; _i2 < replace; _i2++) 
     parts.pop();
-  }
-  for (let _i3 = 0; _i3 < replace; _i3++) {
+  
+  for (let _i3 = 0; _i3 < replace; _i3++) 
     parts.push('=');
-  }
+  
   return parts.join('');
 };
 
@@ -157,9 +160,9 @@ const toAddress = function (publicKey, networkId) {
 */
 const isValid = function isValid (_address) {
   const address = _address.toString().toUpperCase().replace(/-/g, '');
-  if (!address || address.length !== 40) {
+  if (!address || address.length !== 40) 
     return false;
-  }
+  
   const decoded = ua2hex(b32decode(address));
   const versionPrefixedRipemd160Hash = CryptoJS.enc.Hex.parse(decoded.slice(0, 42));
   const tempHash = CryptoJS.SHA3(versionPrefixedRipemd160Hash, {

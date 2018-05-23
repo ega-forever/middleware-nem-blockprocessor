@@ -4,6 +4,10 @@
  * @requires config
  * @requires models/blockModel
  * @requires services/blockProcessService
+ * 
+ * Copyright 2017–2018, LaborX PTY
+ * Licensed under the AGPL Version 3 license.
+ * @author Kirill Sergeev <cloudkserg11@gmail.com>
  */
 
 
@@ -18,14 +22,18 @@ mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 const _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
-  blockModel = require('./models/blockModel'),
   log = bunyan.createLogger({name: 'nem-blockprocessor'}),
-  SockJS = require('sockjs-client'),
-  Stomp = require('webstomp-client'),
-  nem = require('nem-sdk').default,
-  nis = require('./services/nisRequestService'),
-  txsProcessService = require('./services/txsProcessService'),
-  blockProcessService = require('./services/blockProcessService');
+
+  MasterNodeService = require('./shared/services/MasterNodeService'), 
+  ProviderNodeService = require('./shared/services/ProviderNodeService'), 
+  BlockWatchingService = require('./shared/services/blockWatchingService'),
+  SyncCacheService = require('./shared/services/syncCacheService'),
+  ProviderService = require('./shared/services/providerService'),
+
+  blockRepo = require('./services/blockRepository'),
+  NodeListenerService = require('./services/nodeListenerService'),   
+  requests = require('./services/nodeRequests'),
+  filterTxsByAccountsService = require('./services/filterTxsByAccountsService');
 
 [mongoose.accounts, mongoose.connection].forEach(connection =>
   connection.on('disconnected', function () {
@@ -34,133 +42,85 @@ const _ = require('lodash'),
   })
 );
 
-const saveBlockHeight = currentBlock =>
-  blockModel.findOneAndUpdate({network: config.nis.networkName}, {
-    $set: {
-      block: currentBlock,
-      created: Date.now()
-    }
-  }, {upsert: true});
+const init = async () => {
 
-const init = async function () {
-  let currentBlock = await blockModel.findOne({network: config.nis.networkName}).sort('-block');
-  let lastBlockHeight = 0;
-  currentBlock = _.chain(currentBlock).get('block', 0).add(0).value();
-  log.info(`Search from block ${currentBlock} for network:${config.nis.networkName}`);
 
-  // Establishing RabbitMQ connection
-  const amqpInstance = await amqp.connect(config.rabbit.url)
+
+  let amqpInstance = await amqp.connect(config.rabbit.url)
     .catch(() => {
-      log.error('Rabbitmq process has finished!');
+      log.error('rabbitmq process has finished!');
       process.exit(0);
     });
 
   let channel = await amqpInstance.createChannel();
 
   channel.on('close', () => {
-    log.error('Rabbitmq process has finished!');
+    log.error('rabbitmq process has finished!');
     process.exit(0);
   });
 
-  const ws = new SockJS(`${config.nis.websocket}/w/messages`);
-  const client = Stomp.over(ws, {heartbeat: true, debug: false});
+  await channel.assertExchange('events', 'topic', {durable: false});
 
-  await new Promise(res =>
-    client.connect({}, res, () => {
-      log.error('NIS process has finished!');
+
+  let blockEventCallback = async block => {
+    log.info(`${block.hash} (${block.number}) added to cache.`);
+    let filtered = await filterTxsByAccountsService(block.txs);
+    await Promise.all(filtered.map(item =>
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
+    ));
+  };
+  let txEventCallback = async tx => {
+    let filtered = await filterTxsByAccountsService([tx]);
+    await Promise.all(filtered.map(item => 
+      channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))
+    ));
+  };
+
+  const masterNodeService = new MasterNodeService(channel, config.rabbit.serviceName);
+  await masterNodeService.start();
+
+  const providerService = new ProviderService(config.node.providers, requests.getHeightForProvider);
+  const providerNodeService = new ProviderNodeService(channel, providerService, config.rabbit.serviceName);
+  await providerNodeService.start();
+  await providerService.selectProvider();
+  
+
+  const listener = new NodeListenerService(providerService);
+  await listener.selectClient();
+
+  const requestsInstance = requests.createInstance(providerService);
+  const syncCacheService = new SyncCacheService(requestsInstance, blockRepo);
+
+
+  syncCacheService.events.on('block', blockEventCallback);
+
+  let endBlock = await syncCacheService.start(config.consensus.lastBlocksValidateAmount).catch((err) => {
+    _.get(err, 'code') === 0 ? log.info('nodes are down or not synced!') : log.error(err);
+    process.exit(0);
+  });
+
+  await new Promise(res => {
+    if (config.sync.shadow)
+      return res();
+
+    syncCacheService.events.on('end', () => {
+      log.info(`cached the whole blockchain up to block: ${endBlock}`);
+      res();
+    });
+  });
+
+  const blockWatchingService = new BlockWatchingService(requestsInstance, listener, blockRepo, endBlock);  
+  blockWatchingService.events.on('block', blockEventCallback);
+  blockWatchingService.events.on('tx', txEventCallback);
+
+  const provider = await providerService.getProvider();
+  await blockWatchingService.startSync(provider.getHeight()).catch(err => {
+    if (_.get(err, 'code') === 0) {
+      log.error('no connections available or blockchain is not synced!');
       process.exit(0);
-    })
-  );
-
-  client.subscribe('/unconfirmed/*', async function (message) {
-    let data = JSON.parse(message.body);
-
-    let address = message.headers.destination.replace('/unconfirmed/', '');
-
-    let filteredTxs = await txsProcessService([data.transaction]).catch(() => []);
-    for (let tx of filteredTxs) {
-
-      if (tx && tx.signer) {
-        tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
-      }
-
-      let payload = _.chain(tx)
-        .omit(['participants'])
-        .merge({unconfirmed: true, hash: data.meta.hash.data})
-        .value();
-
-      await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-
     }
   });
 
-  try {
-    await channel.assertExchange('events', 'topic', {durable: false});
-  } catch (e) {
-    log.error(e);
-    channel = await amqpInstance.createChannel();
-  }
-
-  /**
-   * Recursive routine for processing incoming blocks.
-   * @return {undefined}
-   */
-  let processBlock = async () => {
-    try {
-      let filteredTxs = await Promise.resolve(blockProcessService(currentBlock)).timeout(20000);
-      log.info(`Publishing ${filteredTxs.length} transactions from block (${currentBlock + 1})`);
-
-      for (let tx of filteredTxs) {
-
-        let accountTxs = await nis.getIncomingTransactions(tx.recipient); //todo replace with hash calculation
-        let hash = _.chain(accountTxs)
-          .find(tx => _.get(tx, 'transaction.transaction.signature') === tx.signature)
-          .get('meta.hash.data')
-          .value();
-
-        if (tx && tx.signer) {
-          tx.sender = nem.model.address.toAddress(tx.signer, config.nis.network);
-        }
-
-        let payload = _.chain(tx)
-          .omit(['participants'])
-          .merge({hash: hash})
-          .value();
-
-        for (let address of _.compact([tx.sender, tx.recipient])) {
-          await channel.publish('events', `${config.rabbit.serviceName}_transaction.${address}`, new Buffer(JSON.stringify(payload)));
-        }
-      }
-
-      await saveBlockHeight(currentBlock + 1);
-
-      currentBlock++;
-      processBlock();
-    } catch (err) {
-      if (err instanceof Promise.TimeoutError) {
-        log.error('Timeout processing the block');
-        return processBlock();
-      }
-
-      if (_.get(err, 'code') === 0) {
-        if (lastBlockHeight !== currentBlock) {
-          log.info('Awaiting for next block');
-        }
-
-        lastBlockHeight = currentBlock;
-        return setTimeout(processBlock, 10000);
-      }
-
-      if (_.get(err, 'code') === 2) {
-        log.info(`Skipping the block (${currentBlock + 1})`);
-        await saveBlockHeight(currentBlock + 1);
-      }
-
-      currentBlock++;
-      processBlock();
-    }
-  };
-
-  processBlock();
 };
+
 module.exports = init();
