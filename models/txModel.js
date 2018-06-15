@@ -2,11 +2,11 @@
  * Mongoose model. Represents a transaction in nem
  * @module models/txModel
  * @returns {Object} Mongoose model
- * 
+ *
  * Copyright 2017–2018, LaborX PTY
  * Licensed under the AGPL Vesrsion 3 license.
  * @author Kirill Sergeev <cloudkserg11@gmail.com>
-*/
+ */
 
 const mongoose = require('mongoose'),
   config = require('../config');
@@ -21,10 +21,9 @@ const TX = new mongoose.Schema({
   fee: {type: Number},
   messagePayload: {type: String},
   messageType: {type: Number},
-
   mosaics: [{
     quantity: {type: Number},
-    type: {type: String},      
+    type: {type: String},
     supplyType: {type: String},
     delta: {type: String},
     fee: {type: String},
@@ -39,4 +38,5 @@ const TX = new mongoose.Schema({
   }]
 });
 
-module.exports = mongoose.model(`${config.mongo.data.collectionPrefix}TX`, TX);
+module.exports = () =>
+  mongoose.model(`${config.mongo.data.collectionPrefix}TX`, TX);

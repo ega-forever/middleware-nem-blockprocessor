@@ -47,9 +47,6 @@ const config = {
     networkName: process.env.NETWORK_NAME || 'testnet',
     providers: createConfigProviders(process.env.PROVIDERS || getDefault())
   },
-  consensus: {
-    lastBlocksValidateAmount: parseInt(process.env.CONSENSUS_BLOCK_VALIDATE_AMOUNT) || 10
-  },
   rabbit: {
     url: process.env.RABBIT_URI || 'amqp://localhost:5672',
     serviceName: process.env.RABBIT_SERVICE_NAME || 'app_nem'

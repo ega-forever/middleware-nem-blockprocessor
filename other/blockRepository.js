@@ -99,14 +99,6 @@ const transformRawBlock = (block) => {
 };
 
 /**
- * @return {Promise}
- */
-const initModels = async () => {
-  await blockModel.init();
-  await txModel.init();
-};
-
-/**
  * @param {blockModel} inputBlock
  * @param {Array of txModel} inputTxs
  * @param {function return Promise} afterSave

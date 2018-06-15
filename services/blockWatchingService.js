@@ -5,8 +5,13 @@
  */
 const bunyan = require('bunyan'),
   _ = require('lodash'),
+  addBlock = require('../utils/blocks/addBlock'),
+  providerService = require('../services/providerService'),
+  models = require('../models'),
   Promise = require('bluebird'),
-
+  getBlock = require('../utils/blocks/getBlock'),
+  addUnconfirmedTx = require('../utils/txs/addUnconfirmedTx'),
+  removeUnconfirmedTxs = require('../utils/txs/removeUnconfirmedTxs'),
   EventEmitter = require('events'),
   log = bunyan.createLogger({name: 'shared.services.blockWatchingService'});
 
@@ -30,50 +35,42 @@ class blockWatchingService {
 
    *
    */
-  constructor (requests, listener, repo, currentHeight) {
-
-    this.requests = requests;
-    this.listener = listener;
-    this.repo = repo;
+  constructor(currentHeight) {
     this.events = new EventEmitter();
-    this.currentHeight = currentHeight || 0;
+    this.currentHeight = currentHeight;
     this.isSyncing = false;
-    this.lastBlockHash = null;
   }
 
-  async startSync (maxHeight) {
+  async startSync() {
 
     if (this.isSyncing)
       return;
 
     this.isSyncing = true;
+    await providerService.get();
 
-    if (!maxHeight)
-      await this.repo.removeUnconfirmedTxs();
+    await removeUnconfirmedTxs();
 
     log.info(`caching from block:${this.currentHeight}`);
+    this.lastBlockHash = null;
     this.doJob();
-    await this.listener.start();
-    await this.listener.onMessage(tx => this.UnconfirmedTxEvent(tx));
+
+    this.unconfirmedTxEventCallback = result => this.unconfirmedTxEvent(result).catch();
+    providerService.events.on('unconfirmedTx', this.unconfirmedTxEventCallback);
 
   }
 
-  async doJob () {
+  async doJob() {
 
     while (this.isSyncing)
       try {
-        const block = await Promise.resolve(this.processBlock()).timeout(60000 * 5);
-        await this.repo.saveBlock(block);
+        const block = await this.processBlock();
+        await addBlock(block);
 
         this.currentHeight++;
         this.lastBlockHash = block.hash;
         this.events.emit('block', block);
       } catch (err) {
-
-        if (err && err.code === 'ENOENT') {
-          log.error('connection is not available');
-          process.exit(0);
-        }
 
         if (err && err.code === 0) {
           log.info(`await for next block ${this.currentHeight}`);
@@ -84,9 +81,12 @@ class blockWatchingService {
         if (_.get(err, 'code') === 1) {
           log.info(`wrong sync state!, rollback to ${this.currentHeight - 1} block`);
 
-          const prevBlocks = await this.repo.findPrevBlocks(2);
-          this.lastBlockHash = _.get(prevBlocks, '1.hash');
-          this.currentHeight = _.get(prevBlocks, '0.number', 0);
+          const currentBlock = await models.blockModel.find({
+            number: {$gte: 0}
+          }).sort({number: -1}).limit(2);
+          this.lastBlockHash = _.get(currentBlock, '1._id');
+          this.currentHeight = _.get(currentBlock, '0.number', 0);
+
           continue;
         }
 
@@ -95,36 +95,34 @@ class blockWatchingService {
       }
   }
 
-  async UnconfirmedTxEvent (tx) {
-    const txs = await this.repo.saveUnconfirmedTxs([tx]);
-    this.events.emit('tx', txs[0]);
+  async unconfirmedTxEvent(tx) {
+    tx = await addUnconfirmedTx(tx);
+    this.events.emit('tx', tx);
   }
 
-  async stopSync () {
+  async stopSync() {
     this.isSyncing = false;
-    await this.listener.stop();
   }
 
-  async getNewBlock (number) {
-    const maxHeight = await this.requests.getLastBlockNumber();
-    if (number > maxHeight)
-      return {};
+  async processBlock() {
 
-    return await this.requests.getBlockByNumber(number);
-  }
+    const apiProvider = await providerService.get();
+    let block = await apiProvider.getHeight();
 
-  async processBlock () {
-    let block = await this.getNewBlock(this.currentHeight);
-    if (!_.get(block, 'hash'))
+    if (block === this.currentHeight - 1)
       return Promise.reject({code: 0});
 
+    const lastBlock = this.currentHeight === 0 ? null :
+      await apiProvider.getBlockByNumber(this.currentHeight - 1);
+
     if (this.lastBlockHash !== null && this.currentHeight > 1) {
-      const isLastBlockSaved = await this.repo.isBlockExist(block.prevBlockHash.data);
-      if (!isLastBlockSaved)
+      let savedBlock = await models.blockModel.count({hash: lastBlock.prevBlockHash.data});
+
+      if (!savedBlock)
         return Promise.reject({code: 1});
     }
 
-    return this.repo.transformRawBlock(block);
+    return getBlock(this.currentHeight);
   }
 
 }

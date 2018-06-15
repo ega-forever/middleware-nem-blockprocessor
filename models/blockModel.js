@@ -23,4 +23,5 @@ const Block = new mongoose.Schema({
   prevBlockHash: {type: String}
 });
 
-module.exports = mongoose.model(`${config.mongo.data.collectionPrefix}Block`, Block);
+module.exports = ()=>
+  mongoose.model(`${config.mongo.data.collectionPrefix}Block`, Block);

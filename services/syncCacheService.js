@@ -6,8 +6,12 @@
 const bunyan = require('bunyan'),
   _ = require('lodash'),
   Promise = require('bluebird'),
+  models = require('../models'),
+  getBlock = require('../utils/blocks/getBlock'),
+  addBlock = require('../utils/blocks/addBlock'),
   EventEmitter = require('events'),
-  allocateBlockBuckets = require('../utils/allocateBlockBuckets'),
+  providerService = require('../services/providerService'),
+  allocateBlockBuckets = require('../utils/blocks/allocateBlockBuckets'),
   log = bunyan.createLogger({name: 'shared.services.syncCacheService'});
 
 /**
@@ -19,31 +23,22 @@ const bunyan = require('bunyan'),
 
 class SyncCacheService {
 
-  /**
-   * Creates an instance of SyncCacheService.
-   * @param {nodeRequests} requests
-   * @param {blockRepository} repo
-   * 
-   * @memberOf SyncCacheService
-   */
-  constructor (requests, repo) {
-    this.requests = requests;
-    this.repo = repo;
+  constructor () {
     this.events = new EventEmitter();
-    this.startIndex = 0;
-    this.isSyncing = true;
   }
 
-  async start (consensusAmount) {
+  async start () {
     await this.indexCollection();
-    let data = await allocateBlockBuckets(this.requests, this.repo, this.startIndex, consensusAmount);
+    let data = await allocateBlockBuckets();
     this.doJob(data.missedBuckets);
     return data.height;
   }
 
   async indexCollection () {
     log.info('indexing...');
-    await this.repo.initModels();
+    await models.blockModel.init();
+    await models.accountModel.init();
+    await models.txModel.init();
     log.info('indexation completed!');
   }
 
@@ -60,34 +55,28 @@ class SyncCacheService {
         this.events.emit('end');
 
       } catch (err) {
-
-        if (err && (err.code === 'ENOENT' || err.code === 'ECONNECT')) {
-          log.error('node is not available');
-          process.exit(0);
-        }
-
         log.error(err);
       }
-
   }
 
   async runPeer (bucket) {
-    let lastBlock = await this.requests.getBlockByNumber(_.last(bucket));
 
-    if (!lastBlock)
+    let apiProvider = await providerService.get();
+
+    let lastBlock = await apiProvider.getBlockByNumber(_.last(bucket));
+
+    if (!lastBlock || (_.last(bucket) !== 0 && !lastBlock.number))
       return await Promise.delay(10000);
 
-    log.info(`bitcoin provider took chuck of blocks ${bucket[0]} - ${_.last(bucket)}`);
+    log.info(`nem provider took chuck of blocks ${bucket[0]} - ${_.last(bucket)}`);
 
     let blocksToProcess = [];
     for (let blockNumber = _.last(bucket); blockNumber >= bucket[0]; blockNumber--)
       blocksToProcess.push(blockNumber);
 
     await Promise.mapSeries(blocksToProcess, async (blockNumber) => {
-      let block = await this.requests.getBlockByNumber(blockNumber);
-
-      block = this.repo.transformRawBlock(block);
-      await this.repo.saveBlock(block);
+      let block = await getBlock(blockNumber);
+      await addBlock(block);
       _.pull(bucket, blockNumber);
       this.events.emit('block', block);
     });

@@ -8,7 +8,7 @@
  */
 
 const _ = require('lodash'),
-  accountModel = require('../models/accountModel');
+  models = require('../models');
 
 module.exports = async (txs) => {
   if (txs.length === 0)
@@ -30,7 +30,7 @@ module.exports = async (txs) => {
     }
   };
 
-  const accounts = await accountModel.find(query);
+  const accounts = await models.accountModel.find(query);
   const nemAccounts = _.map(accounts, a => a.address);
   if (_.isEmpty(nemAccounts))
     return [];
