@@ -95,10 +95,10 @@ const init = async () => {
 };
 
 module.exports = init().catch(err => {
-  if (_.get(err, 'code') === 0) {
+  if (_.get(err, 'code') === 0) 
     log.info('nodes are down or not synced!');
-  } else {
+  else 
     log.error(err);
-  }
+  
   process.exit(0);
 });

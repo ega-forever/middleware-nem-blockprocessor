@@ -45,7 +45,7 @@ module.exports = async (txs) => {
     _.compact([tx.sender, tx.recipient, tx.coSigner]).forEach(address => {
       if (nemAccounts.indexOf(address) !== -1)
         acc.push(_.merge({}, tx, {address}));
-    })
+    });
   }, []);
 
 };

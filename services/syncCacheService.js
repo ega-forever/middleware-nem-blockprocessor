@@ -62,7 +62,6 @@ class SyncCacheService {
   async runPeer (bucket) {
 
     let apiProvider = await providerService.get();
-
     let lastBlock = await apiProvider.getBlockByNumber(_.last(bucket));
 
     if (!lastBlock || (_.last(bucket) !== 0 && !lastBlock.number))

@@ -26,9 +26,9 @@ module.exports = (tx, blockNumber) => {
     transformedTx.fee = transformedTx.fee || tx.fee;
     transformedTx.recipient = tx.otherTrans.recipient;
     transformedTx.sender = nem.model.address.toAddress(tx.otherTrans.signer, config.node.network);
-  } else {
+  } else 
     transformedTx.sender = nem.model.address.toAddress(tx.signer, config.node.network);
-  }
+  
 
   return transformedTx;
 };

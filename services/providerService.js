@@ -5,7 +5,6 @@
  */
 
 const bunyan = require('bunyan'),
-  _ = require('lodash'),
   config = require('../config'),
   Api = require('../utils/api/Api'),
   sem = require('semaphore')(1),
@@ -23,7 +22,7 @@ const bunyan = require('bunyan'),
 
 class providerService {
 
-  constructor() {
+  constructor () {
     this.events = new EventEmitter();
     this.connector = null;
     //this.filter = null;
@@ -34,12 +33,12 @@ class providerService {
       }, 60000 * 5);
   }
 
-  async resetConnector() {
+  async resetConnector () {
     this.switchConnector();
     this.events.emit('disconnected');
   }
 
-  async switchConnector() {
+  async switchConnector () {
 
     const providerURI = await Promise.any(config.node.providers.map(async providerURI => {
 
@@ -90,7 +89,7 @@ class providerService {
 
   }
 
-  async switchConnectorSafe() {
+  async switchConnectorSafe () {
 
     return new Promise(res => {
       sem.take(async () => {
@@ -101,7 +100,7 @@ class providerService {
     });
   }
 
-  async get() {
+  async get () {
     return this.connector || await this.switchConnectorSafe();
   }
 

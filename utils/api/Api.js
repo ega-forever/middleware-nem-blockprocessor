@@ -9,7 +9,7 @@ const EventEmitter = require('events'),
 
 class Api {
 
-  constructor(URI) {
+  constructor (URI) {
     this.http = URI.http;
     this.ws = URI.ws;
     this.events = new EventEmitter();
@@ -17,7 +17,7 @@ class Api {
   }
 
 
-  buildWSProvider() {
+  buildWSProvider () {
     const ws = new SockJS(`${this.ws}/w/messages`);
     const client = Stomp.over(ws, {heartbeat: true, debug: false});
     ws.onclose = () => this.events.emit('disconnect');
@@ -25,13 +25,13 @@ class Api {
     return client;
   }
 
-  async openWSProvider(){
+  async openWSProvider (){
     return await new Promise((res, rej)=>{
       this.wsProvider.connect({}, res, rej);
     });
   }
 
-  async _makeRequest(url, method = 'GET', body) {
+  async _makeRequest (url, method = 'GET', body) {
     const options = {
       method: method,
       body: body,
@@ -41,7 +41,7 @@ class Api {
     return Promise.resolve(request(options)).timeout(10000);
   }
 
-  async getBlockByNumber(height) {
+  async getBlockByNumber (height) {
     const block = await this._makeRequest('block/at/public', 'POST', {height: (height > 1 ? height : 1)});
 
     if (!block || !block.height)
@@ -54,7 +54,7 @@ class Api {
   }
 
 
-  async getHeight() {
+  async getHeight () {
     const data = await this._makeRequest('chain/height');
     return data.height;
   }

@@ -35,13 +35,13 @@ class blockWatchingService {
 
    *
    */
-  constructor(currentHeight) {
+  constructor (currentHeight) {
     this.events = new EventEmitter();
     this.currentHeight = currentHeight;
     this.isSyncing = false;
   }
 
-  async startSync() {
+  async startSync () {
 
     if (this.isSyncing)
       return;
@@ -60,7 +60,7 @@ class blockWatchingService {
 
   }
 
-  async doJob() {
+  async doJob () {
 
     while (this.isSyncing)
       try {
@@ -95,16 +95,16 @@ class blockWatchingService {
       }
   }
 
-  async unconfirmedTxEvent(tx) {
+  async unconfirmedTxEvent (tx) {
     tx = await addUnconfirmedTx(tx);
     this.events.emit('tx', tx);
   }
 
-  async stopSync() {
+  async stopSync () {
     this.isSyncing = false;
   }
 
-  async processBlock() {
+  async processBlock () {
 
     const apiProvider = await providerService.get();
     let block = await apiProvider.getHeight();
