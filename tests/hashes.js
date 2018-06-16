@@ -5,8 +5,9 @@
  */
 const hashes = require('../utils/hashes/hashes'),
   _ = require('lodash'),
+  config = require('../config'),
   expect = require('chai').expect,
-  ProviderService = require('../services/providerService'),
+  Api = require('../utils/api/Api'),
   Promise = require('bluebird');
 
 
@@ -72,19 +73,20 @@ describe('core/block processor', function () {
     };
 
     const blockIds = _.reduce(exampleBlocks, (result, block) => _.merge(result, block), []);
-    const apiProvider = await ProviderService.get();
+    const api = new Api(config.node.providers[0]);
 
     await Promise.map(blockIds, async (blockId) => {
-      const block = await apiProvider.getBlockByNumber(blockId);
-      const blockCompare = await apiProvider.getBlockByNumber(blockId + 1);
+      const block = await api.getBlockByNumber(blockId);
+      const blockCompare = await api.getBlockByNumber(blockId + 1);
       expect(hashes.calculateBlockHash(block)).to.be.equal(blockCompare.prevBlockHash.data);
     });
   });
 
   it('check transaction hash', async () => {
-    const apiProvider = await ProviderService.get();
-    const block = await apiProvider.getBlockByNumber(1468878);
+    const api = new Api(config.node.providers[0]);
+    const block = await api.getBlockByNumber(1468878);
     const tx = block.transactions[0];
     expect(hashes.calculateTransactionHash(tx)).to.be.equal('a5006fc20e1ef2d1d50177de7982246ea62070af7b8befca765d39c78b169551');
   });
+
 });
