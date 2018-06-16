@@ -26,11 +26,11 @@ const blockValidator = async (minBlock, maxBlock, chunkSize) => {
       const maxBlock = _.last(chunk);
       log.info(`validating blocks from: ${minBlock} to ${maxBlock}`);
 
-      const count = await models.blockModel.count({
-        number: minBlock === maxBlock ? minBlock : {
-          $gte: minBlock,
-          $lt: maxBlock
-        }
+      const count = await models.blockModel.count(minBlock === maxBlock ? {number: minBlock} : {
+        $and: [
+          {number: {$gte: minBlock}},
+          {number: {$lte: maxBlock}}
+        ]
       });
 
       if (maxBlock !== minBlock && count !== maxBlock - minBlock + 1 && count)

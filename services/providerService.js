@@ -25,7 +25,6 @@ class providerService {
   constructor () {
     this.events = new EventEmitter();
     this.connector = null;
-    //this.filter = null;
 
     if (config.node.providers.length > 1)
       this.findBestNodeInterval = setInterval(() => {
@@ -62,22 +61,15 @@ class providerService {
     this.connector = new Api(providerURI);
     this.connector.events.on('disconnect', () => this.resetConnector());
 
-    /*    this.pingIntervalId = setInterval(async () => { //todo write
+        this.pingIntervalId = setInterval(async () => {
 
-          const isConnected = await new Promise((res, rej) => {
-            this.connector.currentProvider.sendAsync({
-              id: 9999999999,
-              jsonrpc: '2.0',
-              method: 'net_listening',
-              params: []
-            }, (err, result) => err ? rej(err) : res(result.result));
-          });
+          const isConnected = await this.connector.getHeight().catch(()=>false);
 
-          if (!isConnected) {
+          if (isConnected === false) {
             clearInterval(this.pingIntervalId);
             this.resetConnector();
           }
-        }, 5000);*/
+        }, 5000);
 
     await this.connector.openWSProvider();
 
