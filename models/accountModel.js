@@ -37,6 +37,10 @@ const getMosaics = (mosaics) => {
     .value();
 };
 
+/** @model accountModel
+ *  @description account model - represents an bitcoin account
+ */
+
 const Account = new mongoose.Schema({
   address: {
     type: String,

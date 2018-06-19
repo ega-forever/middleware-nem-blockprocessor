@@ -5,19 +5,17 @@
  */
 
 const bunyan = require('bunyan'),
-  _ = require('lodash'),
-  //removeUnconfirmedTxs = require('../txs/removeUnconfirmedTxs'),
-  //crypto = require('crypto'),
   sem = require('semaphore')(3),
   Promise = require('bluebird'),
   models = require('../../models'),
+  removeUnconfirmedTxs = require('../txs/removeUnconfirmedTxs'),
   log = bunyan.createLogger({name: 'app.services.addBlock'});
 
 /**
- * @service
- * @description filter txs by registered addresses
- * @param block - the block object
- * @param removePending - remove unconfirmed txs, which has been pulled from mempool
+ * @function
+ * @description add block to the cache
+ * @param block - prepared block with full txs
+ * @param removePending - remove pending transactions
  * @returns {Promise.<*>}
  */
 
@@ -38,10 +36,16 @@ const addBlock = async (block, removePending = false) => {
     });
 
   });
-
 };
 
-const updateDbStateWithBlock = async (block) => {
+/**
+ * @function
+ * @description add new block, txs and coins to the cache
+ * @param block
+ * @param removePending
+ * @return {Promise<void>}
+ */
+const updateDbStateWithBlock = async (block, removePending) => {
 
   const txs = block.txs.map(tx => {
     tx._id = tx.hash;
@@ -62,6 +66,9 @@ const updateDbStateWithBlock = async (block) => {
   if (bulkOps.length)
     await models.txModel.bulkWrite(bulkOps);
 
+  if (removePending)
+    await removeUnconfirmedTxs();
+
   const toSaveBlock = {
     _id: block.hash,
     number: block.number,
@@ -71,6 +78,12 @@ const updateDbStateWithBlock = async (block) => {
   return await models.blockModel.findOneAndUpdate({number: toSaveBlock.number}, toSaveBlock, {upsert: true});
 };
 
+/**
+ * @function
+ * @description rollback the cache to previous block
+ * @param block - current block
+ * @return {Promise<void>}
+ */
 const rollbackStateFromBlock = async (block) => {
 
   log.info('rolling back txs state');

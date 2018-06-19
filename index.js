@@ -94,7 +94,7 @@ const init = async () => {
   syncCacheService.events.on('block', blockEventCallback);
 
   let endBlock = await syncCacheService.start();
-  return;
+
   await new Promise(res => {
     if (config.sync.shadow)
       return res();

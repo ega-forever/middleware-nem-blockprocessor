@@ -7,6 +7,12 @@ const EventEmitter = require('events'),
   SockJS = require('sockjs-client'),
   Stomp = require('webstomp-client');
 
+/**
+ * @service
+ * @param URI - the endpoint URI
+ * @description http provider for nem node
+ */
+
 class Api {
 
   constructor (URI) {
@@ -17,6 +23,11 @@ class Api {
   }
 
 
+  /**
+   * @function
+   * @description build ws provider for the connector
+   * @return {Client}
+   */
   buildWSProvider () {
     const ws = new SockJS(`${this.ws}/w/messages`);
     const client = Stomp.over(ws, {heartbeat: true, debug: false});
@@ -25,12 +36,26 @@ class Api {
     return client;
   }
 
+  /**
+   * @function
+   * @description open ws provider
+   * @return {Promise<void>}
+   */
   async openWSProvider (){
     return await new Promise((res, rej)=>{
       this.wsProvider.connect({}, res, rej);
     });
   }
 
+  /**
+   * @function
+   * @description internal method for making requests
+   * @param url - endpoint url
+   * @param method - the HTTP method
+   * @param body - the body of the request
+   * @return {Promise<*>}
+   * @private
+   */
   async _makeRequest (url, method = 'GET', body) {
     const options = {
       method: method,
@@ -41,6 +66,12 @@ class Api {
     return Promise.resolve(request(options)).timeout(10000);
   }
 
+  /**
+   * @function
+   * @description get block by it's number
+   * @param height
+   * @return {Promise<{}>}
+   */
   async getBlockByNumber (height) {
     const block = await this._makeRequest('block/at/public', 'POST', {height: (height > 1 ? height : 1)});
 
@@ -54,6 +85,11 @@ class Api {
   }
 
 
+  /**
+   * @function
+   * @description get blockchain current height
+   * @return {Promise<*>}
+   */
   async getHeight () {
     const data = await this._makeRequest('chain/height');
     return data.height;

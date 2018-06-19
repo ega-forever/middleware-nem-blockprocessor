@@ -8,6 +8,7 @@ const bunyan = require('bunyan'),
   addBlock = require('../utils/blocks/addBlock'),
   providerService = require('../services/providerService'),
   models = require('../models'),
+  blockWatchingInterface = require('middleware-common-components/interfaces/blockProcessor/blockWatchingServiceInterface'),
   Promise = require('bluebird'),
   getBlock = require('../utils/blocks/getBlock'),
   addUnconfirmedTx = require('../utils/txs/addUnconfirmedTx'),
@@ -17,29 +18,23 @@ const bunyan = require('bunyan'),
 
 /**
  * @service
- * @description filter txs by registered addresses
- * @param block - an array of txs
- * @returns {Promise.<*>}
+ * @description the service is watching for the recent blocks and transactions (including unconfirmed)
+ * @param currentHeight - the current blockchain's height
+ * @returns Object<BlockWatchingService>
  */
 
-class blockWatchingService {
+class BlockWatchingService {
 
-  /**
-   * Creates an instance of blockWatchingService.
-   * @param {nodeRequests} requests
-   * @param {NodeListenerService} listener
-   * @param {blockRepository} repo
-   * @param {Number} currentHeight
-   *
-   * @memberOf blockWatchingService
-
-   *
-   */
   constructor (currentHeight) {
     this.events = new EventEmitter();
     this.currentHeight = currentHeight;
     this.isSyncing = false;
   }
+
+  /**function
+   * @description start sync process
+   * @return {Promise<void>}
+   */
 
   async startSync () {
 
@@ -60,12 +55,17 @@ class blockWatchingService {
 
   }
 
+  /**
+   * @function
+   * start block watching
+   * @return {Promise<void>}
+   */
   async doJob () {
 
     while (this.isSyncing)
       try {
         const block = await this.processBlock();
-        await addBlock(block);
+        await addBlock(block, true);
 
         this.currentHeight++;
         this.lastBlockHash = block.hash;
@@ -95,15 +95,32 @@ class blockWatchingService {
       }
   }
 
+  /**
+   * @function
+   * @description process unconfirmed tx
+   * @param tx - the encoded raw transaction
+   * @return {Promise<void>}
+   */
   async unconfirmedTxEvent (tx) {
     tx = await addUnconfirmedTx(tx);
     this.events.emit('tx', tx);
   }
 
+  /**
+   * @function
+   * @description stop the sync process
+   * @return {Promise<void>}
+   */
   async stopSync () {
     this.isSyncing = false;
   }
 
+
+  /**
+   * @function
+   * @description process the next block from the current height
+   * @return {Promise<*>}
+   */
   async processBlock () {
 
     const apiProvider = await providerService.get();
@@ -127,4 +144,6 @@ class blockWatchingService {
 
 }
 
-module.exports = blockWatchingService;
+module.exports = function (...args) {
+  return blockWatchingInterface(new BlockWatchingService(...args));
+};

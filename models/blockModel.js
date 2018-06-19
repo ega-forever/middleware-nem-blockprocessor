@@ -17,6 +17,12 @@
 const mongoose = require('mongoose'),
   config = require('../config');
 
+/**
+ * Mongoose model. Represents a block in nem
+ * @module models/blockModel
+ * @returns {Object} Mongoose model
+ */
+
 const Block = new mongoose.Schema({
   _id: {type: String},
   number: {type: Number, unique: true, index: true},

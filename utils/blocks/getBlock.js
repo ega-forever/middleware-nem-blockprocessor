@@ -9,6 +9,12 @@ const Promise = require('bluebird'),
   transformTx = require('../txs/transformTx'),
   providerService = require('../../services/providerService');
 
+/**
+ * @function
+ * @description get block from the node
+ * @param blockNumber
+ * @return {Promise<{number: *, timestamp: *, hash: *, signer: *, txs: *}>}
+ */
 module.exports = async (blockNumber) => {
 
   let apiProvider = await providerService.get();

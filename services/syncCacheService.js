@@ -16,8 +16,7 @@ const bunyan = require('bunyan'),
 
 /**
  * @service
- * @description filter txs by registered addresses
- * @param block - an array of txs
+ * @description sync the blockchain history
  * @returns {Promise.<*>}
  */
 
@@ -27,6 +26,10 @@ class SyncCacheService {
     this.events = new EventEmitter();
   }
 
+  /** @function
+   * @description start syncing process
+   * @return {Promise<*>}
+   */
   async start () {
     await this.indexCollection();
     let data = await allocateBlockBuckets();
@@ -34,6 +37,11 @@ class SyncCacheService {
     return data.height;
   }
 
+  /**
+   * @function
+   * @description index all collections in mongo
+   * @return {Promise<void>}
+   */
   async indexCollection () {
     log.info('indexing...');
     await models.blockModel.init();
@@ -42,6 +50,12 @@ class SyncCacheService {
     log.info('indexation completed!');
   }
 
+  /**
+   * @function
+   * @description process the buckets
+   * @param buckets - array of blocks
+   * @return {Promise<void>}
+   */
   async doJob (buckets) {
 
     while (buckets.length)
@@ -59,6 +73,12 @@ class SyncCacheService {
       }
   }
 
+  /**
+   * @function
+   * @description process the bucket
+   * @param bucket
+   * @return {Promise<*>}
+   */
   async runPeer (bucket) {
 
     let apiProvider = await providerService.get();

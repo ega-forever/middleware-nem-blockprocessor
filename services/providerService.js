@@ -15,14 +15,13 @@ const bunyan = require('bunyan'),
 
 /**
  * @service
- * @description filter txs by registered addresses
- * @param block - an array of txs
- * @returns {Promise.<*>}
+ * @description the service for handling connection to node
+ * @returns Object<ProviderService>
  */
 
 class ProviderService {
 
-  constructor () {
+  constructor() {
     this.events = new EventEmitter();
     this.connector = null;
 
@@ -32,12 +31,21 @@ class ProviderService {
       }, 60000 * 5);
   }
 
-  async resetConnector () {
+  /** @function
+   * @description reset the current connection
+   * @return {Promise<void>}
+   */
+  async resetConnector() {
     this.switchConnector();
     this.events.emit('disconnected');
   }
 
-  async switchConnector () {
+  /**
+   * @function
+   * @description choose the connector
+   * @return {Promise<null|*>}
+   */
+  async switchConnector() {
 
     const providerURI = await Promise.any(config.node.providers.map(async providerURI => {
 
@@ -63,15 +71,15 @@ class ProviderService {
     this.connector = new Api(providerURI);
     this.connector.events.on('disconnect', () => this.resetConnector());
 
-        this.pingIntervalId = setInterval(async () => {
+    this.pingIntervalId = setInterval(async () => {
 
-          const isConnected = await this.connector.getHeight().catch(()=>false);
+      const isConnected = await this.connector.getHeight().catch(() => false);
 
-          if (isConnected === false) {
-            clearInterval(this.pingIntervalId);
-            this.resetConnector();
-          }
-        }, 5000);
+      if (isConnected === false) {
+        clearInterval(this.pingIntervalId);
+        this.resetConnector();
+      }
+    }, 5000);
 
     await this.connector.openWSProvider();
 
@@ -83,7 +91,12 @@ class ProviderService {
 
   }
 
-  async switchConnectorSafe () {
+  /**
+   * @function
+   * @description safe connector switching, by moving requests to
+   * @return {Promise<bluebird>}
+   */
+  async switchConnectorSafe() {
 
     return new Promise(res => {
       sem.take(async () => {
@@ -94,7 +107,12 @@ class ProviderService {
     });
   }
 
-  async get () {
+  /**
+   * @function
+   * @description
+   * @return {Promise<*|bluebird>}
+   */
+  async get() {
     return this.connector || await this.switchConnectorSafe();
   }
 

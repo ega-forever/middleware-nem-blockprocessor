@@ -13,6 +13,12 @@ const mongoose = require('mongoose'),
 
 require('mongoose-long')(mongoose);
 
+/**
+ * Mongoose model. Represents a transaction in nem
+ * @module models/blockModel
+ * @returns {Object} Mongoose model
+ */
+
 const TX = new mongoose.Schema({
   _id: {type: String},
   blockNumber: {type: Number, required: true, index: true, default: -1},

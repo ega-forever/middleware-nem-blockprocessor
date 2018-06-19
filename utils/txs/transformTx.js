@@ -3,6 +3,23 @@ const hashes = require('../hashes/hashes'),
   config = require('../../config'),
   _ = require('lodash');
 
+/**
+ * @function
+ * @description transform transaction object
+ * @param tx - the transaction
+ * @param blockNumber - tx's blockNumber
+ * @return {{
+ *  blockNumber: *,
+ *  timestamp: number,
+ *  amount: (number|null),
+ *  hash: *,
+ *  recipient: string,
+ *  fee: number,
+ *  messagePayload: *,
+ *  messageType: *,
+ *  mosaics: (*|null)
+ *  }}
+ */
 module.exports = (tx, blockNumber) => {
 
   const transformedTx = {
