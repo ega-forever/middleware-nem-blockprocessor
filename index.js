@@ -22,6 +22,7 @@ const config = require('./config'),
   MasterNodeService = require('middleware-common-components/services/blockProcessor/MasterNodeService'),
   BlockWatchingService = require('./services/blockWatchingService'),
   SyncCacheService = require('./services/syncCacheService'),
+  providerService = require('./services/providerService'),
   filterTxsByAccountsService = require('./services/filterTxsByAccountsService');
 
 mongoose.Promise = Promise; // Use custom Promises
@@ -49,9 +50,27 @@ const init = async () => {
   });
 
   await channel.assertExchange('events', 'topic', {durable: false});
+  await channel.assertExchange('internal', 'topic', {durable: false});
+  //channel.bindQueue(`${config.rabbit.serviceName}_current_provider.set`, 'internal', `${config.rabbit.serviceName}_current_provider.set`);
+  await channel.assertQueue(`${config.rabbit.serviceName}_current_provider.get`, {durable: false});
+  await channel.bindQueue(`${config.rabbit.serviceName}_current_provider.get`, 'internal', `${config.rabbit.serviceName}_current_provider.get`);
+
 
   const masterNodeService = new MasterNodeService(channel, config.rabbit.serviceName);
   await masterNodeService.start();
+
+  providerService.events.on('provider_set', providerURI => {
+    let providerIndex = _.findIndex(config.node.providers, providerURI);
+    if (providerIndex !== -1)
+      channel.publish('internal', `${config.rabbit.serviceName}_current_provider.set`, new Buffer(JSON.stringify({index: providerIndex})));
+  });
+
+  channel.consume(`${config.rabbit.serviceName}_current_provider.get`, async () => {
+    let providerInstance = await providerService.get();
+    let providerIndex = _.findIndex(config.node.providers, provider => provider.http === providerInstance.http);
+    if (providerIndex !== -1)
+      channel.publish('internal', `${config.rabbit.serviceName}_current_provider.set`, new Buffer(JSON.stringify({index: providerIndex})));
+  }, {noAck: true});
 
 
   const syncCacheService = new SyncCacheService();
@@ -75,7 +94,7 @@ const init = async () => {
   syncCacheService.events.on('block', blockEventCallback);
 
   let endBlock = await syncCacheService.start();
-
+  return;
   await new Promise(res => {
     if (config.sync.shadow)
       return res();
@@ -95,10 +114,10 @@ const init = async () => {
 };
 
 module.exports = init().catch(err => {
-  if (_.get(err, 'code') === 0) 
+  if (_.get(err, 'code') === 0)
     log.info('nodes are down or not synced!');
-  else 
+  else
     log.error(err);
-  
+
   process.exit(0);
 });

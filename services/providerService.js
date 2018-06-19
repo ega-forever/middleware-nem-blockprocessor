@@ -20,7 +20,7 @@ const bunyan = require('bunyan'),
  * @returns {Promise.<*>}
  */
 
-class providerService {
+class ProviderService {
 
   constructor () {
     this.events = new EventEmitter();
@@ -57,6 +57,8 @@ class providerService {
 
     if (this.connector && this.connector.http === providerURI.http)
       return;
+
+    this.events.emit('provider_set', providerURI);
 
     this.connector = new Api(providerURI);
     this.connector.events.on('disconnect', () => this.resetConnector());
@@ -98,4 +100,4 @@ class providerService {
 
 }
 
-module.exports = providerServiceInterface(new providerService());
+module.exports = providerServiceInterface(new ProviderService());

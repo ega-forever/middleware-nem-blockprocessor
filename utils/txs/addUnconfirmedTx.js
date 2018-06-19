@@ -19,8 +19,10 @@ const bunyan = require('bunyan'),
 module.exports = async (tx) => {
 
   tx = transformTx(tx, -1);
+  tx._id = tx.hash;
+  delete tx.hash;
 
-  log.info(`inserting unconfirmed tx ${tx.hash}`);
+  log.info(`inserting unconfirmed tx ${tx._id}`);
   await models.txModel.create(tx);
   return tx;
 

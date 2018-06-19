@@ -11,11 +11,6 @@ const Promise = require('bluebird'),
 
 module.exports = async (blockNumber) => {
 
-  /**
-   * Get raw block
-   * @type {Object}
-   */
-
   let apiProvider = await providerService.get();
 
   let rawBlock = await apiProvider.getBlockByNumber(blockNumber);
@@ -27,14 +22,10 @@ module.exports = async (blockNumber) => {
 
   return {
     number: rawBlock.height,
-    timeStamp: rawBlock.time || Date.now(),
+    timestamp: rawBlock.timeStamp || Date.now(),
     hash: hashes.calculateBlockHash(rawBlock),
-    type: rawBlock.type,
-    signature: rawBlock.signature,
-    version: rawBlock.version,
     signer: rawBlock.signer,
-    txs: txs,
-    prevBlockHash: rawBlock.prevBlockHash.data
+    txs: txs
   };
 
 };
