@@ -50,9 +50,7 @@ class ProviderService {
     const providerURI = await Promise.any(config.node.providers.map(async providerURI => {
 
       const apiProvider = new Api(providerURI);
-      await new Promise((res, rej) => {
-        apiProvider.wsProvider.connect({}, res, rej);
-      });
+      await apiProvider.openWSProvider();
 
       await apiProvider.getHeight();
       apiProvider.wsProvider.disconnect();

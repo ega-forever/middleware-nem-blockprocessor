@@ -9,7 +9,6 @@ const mongoose = require('mongoose'),
   saveAccountForAddress = require('./helpers/saveAccountForAddress'),
   connectToQueue = require('./helpers/connectToQueue'),
   clearQueues = require('./helpers/clearQueues'),
-  _ = require('lodash'),
   consumeMessages = require('./helpers/consumeMessages'),
   createTransaction = require('./helpers/createTransaction'),
   consumeStompMessages = require('./helpers/consumeStompMessages'),
@@ -62,7 +61,7 @@ describe('core/block processor', function () {
     const checkMessage = function (content) {
       expect(content).to.contain.all.keys(
         'amount',
-        'timeStamp',
+        'timestamp',
         'fee',
         'recipient',
         'messagePayload',
@@ -79,13 +78,10 @@ describe('core/block processor', function () {
       if (transaction.blockNumber !== -1) {
         const block = await models.blockModel.findOne({number: transaction.blockNumber});
         expect(block.number).to.equal(transaction.blockNumber);
-        expect(block.txs).to.not.empty;
-        const txHash = _.find(block.txs, hash => hash === transaction.hash);
-        expect(txHash).to.not.undefined;
       }
 
-      const tx = await models.txModel.findOne({hash: transaction.hash});
-      expect(tx.amount).to.equal(transaction.amount);
+      let tx = await models.txModel.findOne({_id: transaction.hash});
+      expect(tx.amount.toString()).to.equal(transaction.amount.toString());
       expect(tx.sender).to.equal(transaction.sender);
       expect(tx.recipient).to.equal(transaction.recipient);
       return true;
@@ -103,13 +99,13 @@ describe('core/block processor', function () {
           tx.sender = config.dev.users.Bob.address;
           tx.recipient = config.dev.users.Alice.address;
           if (tx.code === 5)
-            throw new Error('Account has not balance');
+            throw new Error('Account has no balance');
         }
       })(),
       (async () => {
         return await consumeMessages(1, channel, (message) => {
           const content = JSON.parse(message.content);
-          if (tx.timeStamp && content.timeStamp === tx.timeStamp) {
+          if (tx.timeStamp && content.timestamp === tx.timeStamp) {
             checkMessage(content);
             checkDb(content);
             return true;
@@ -122,7 +118,7 @@ describe('core/block processor', function () {
         const client = Stomp.over(ws, {heartbeat: false, debug: false});
         await consumeStompMessages(1, client, (message) => {
           const body = JSON.parse(message.body);
-          if (tx.timeStamp && body.timeStamp === tx.timeStamp) {
+          if (tx.timeStamp && body.timestamp === tx.timeStamp) {
             checkMessage(body);
             checkDb(body);
             return true;

@@ -75,6 +75,7 @@ describe('core/block processor', function () {
     const blockIds = _.reduce(exampleBlocks, (result, block) => _.merge(result, block), []);
     const api = new Api(config.node.providers[0]);
 
+
     await Promise.map(blockIds, async (blockId) => {
       const block = await api.getBlockByNumber(blockId);
       const blockCompare = await api.getBlockByNumber(blockId + 1);
