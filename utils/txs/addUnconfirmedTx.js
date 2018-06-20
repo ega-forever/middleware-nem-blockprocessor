@@ -6,6 +6,7 @@
 
 const bunyan = require('bunyan'),
   models = require('../../models'),
+  _ = require('lodash'),
   transformTx = require('./transformTx'),
   log = bunyan.createLogger({name: 'app.utils.addUnconfirmedTx'});
 
@@ -19,11 +20,13 @@ const bunyan = require('bunyan'),
 module.exports = async (tx) => {
 
   tx = transformTx(tx, -1);
-  tx._id = tx.hash;
-  delete tx.hash;
+  const toSaveTx = _.chain({})
+    .merge(tx, {_id: tx.hash})
+    .omit('hash')
+    .value();
 
-  log.info(`inserting unconfirmed tx ${tx._id}`);
-  await models.txModel.create(tx);
+  log.info(`inserting unconfirmed tx ${tx.hash}`);
+  await models.txModel.create(toSaveTx);
   return tx;
 
 };

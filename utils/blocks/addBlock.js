@@ -6,6 +6,7 @@
 
 const bunyan = require('bunyan'),
   sem = require('semaphore')(3),
+  _ = require('lodash'),
   Promise = require('bluebird'),
   models = require('../../models'),
   removeUnconfirmedTxs = require('../txs/removeUnconfirmedTxs'),
@@ -48,9 +49,10 @@ const addBlock = async (block, removePending = false) => {
 const updateDbStateWithBlock = async (block, removePending) => {
 
   const txs = block.txs.map(tx => {
-    tx._id = tx.hash;
-    delete tx.hash;
-    return tx;
+    return _.chain({})
+      .merge(tx, {_id: tx.hash})
+      .omit('hash')
+      .value();
   });
 
   let bulkOps = txs.map(tx => {
