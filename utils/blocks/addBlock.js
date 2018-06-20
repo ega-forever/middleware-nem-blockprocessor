@@ -50,8 +50,8 @@ const updateDbStateWithBlock = async (block, removePending) => {
 
   const txs = block.txs.map(tx => {
     return _.chain({})
-      .merge(tx, {_id: tx.hash})
-      .omit('hash')
+      .merge(tx, {_id: tx.hash, timestamp: tx.timeStamp})
+      .omit(['hash', 'timeStamp'])
       .value();
   });
 
