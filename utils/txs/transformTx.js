@@ -24,7 +24,7 @@ module.exports = (tx, blockNumber) => {
 
   const transformedTx = {
     blockNumber: blockNumber,
-    timestamp: tx.timeStamp,
+    timeStamp: tx.timeStamp,
     amount: tx.amount || null,
     hash: hashes.calculateTransactionHash(tx),
     recipient: tx.recipient,

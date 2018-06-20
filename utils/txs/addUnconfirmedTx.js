@@ -21,8 +21,8 @@ module.exports = async (tx) => {
 
   tx = transformTx(tx, -1);
   const toSaveTx = _.chain({})
-    .merge(tx, {_id: tx.hash})
-    .omit('hash')
+    .merge(tx, {_id: tx.hash, timestamp: tx.timeStamp})
+    .omit(['hash', 'timeStamp'])
     .value();
 
   log.info(`inserting unconfirmed tx ${tx.hash}`);

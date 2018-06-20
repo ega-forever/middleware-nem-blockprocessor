@@ -19,16 +19,15 @@ class Api {
     this.http = URI.http;
     this.ws = URI.ws;
     this.events = new EventEmitter();
-    this.wsProvider = this.buildWSProvider();
   }
-
 
   /**
    * @function
+   * @internal
    * @description build ws provider for the connector
    * @return {Client}
    */
-  buildWSProvider () {
+  _buildWSProvider () {
     const ws = new SockJS(`${this.ws}/w/messages`);
     const client = Stomp.over(ws, {heartbeat: true, debug: false});
     ws.onclose = () => this.events.emit('disconnect');
@@ -42,6 +41,9 @@ class Api {
    * @return {Promise<void>}
    */
   async openWSProvider (){
+    if(!this.wsProvider)
+      this.wsProvider = this._buildWSProvider();
+
     return await new Promise((res, rej)=>{
       this.wsProvider.connect({}, res, rej);
     });
