@@ -61,7 +61,7 @@ describe('core/block processor', function () {
     const checkMessage = function (content) {
       expect(content).to.contain.all.keys(
         'amount',
-        'timestamp',
+        'timeStamp',
         'fee',
         'recipient',
         'messagePayload',
@@ -105,7 +105,7 @@ describe('core/block processor', function () {
       (async () => {
         return await consumeMessages(1, channel, (message) => {
           const content = JSON.parse(message.content);
-          if (tx.timeStamp && content.timestamp === tx.timeStamp) {
+          if (tx.timeStamp && content.timeStamp === tx.timeStamp) {
             checkMessage(content);
             checkDb(content);
             return true;
@@ -118,7 +118,7 @@ describe('core/block processor', function () {
         const client = Stomp.over(ws, {heartbeat: false, debug: false});
         await consumeStompMessages(1, client, (message) => {
           const body = JSON.parse(message.body);
-          if (tx.timeStamp && body.timestamp === tx.timeStamp) {
+          if (tx.timeStamp && body.timeStamp === tx.timeStamp) {
             checkMessage(body);
             checkDb(body);
             return true;
