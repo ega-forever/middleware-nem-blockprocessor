@@ -13,7 +13,7 @@
 const mongoose = require('mongoose'),
   config = require('../config'),
   _ = require('lodash'),
-  messages = require('../factories/messages/addressMessageFactory');
+  messages = require('middleware-common-components/factories/messages/addressMessageFactory');
 
 require('mongoose-long')(mongoose);
 
@@ -37,6 +37,10 @@ const getMosaics = (mosaics) => {
     .value();
 };
 
+/** @model accountModel
+ *  @description account model - represents an bitcoin account
+ */
+
 const Account = new mongoose.Schema({
   address: {
     type: String,
@@ -57,4 +61,5 @@ const Account = new mongoose.Schema({
   toJSON: {getters: true}
 });
 
-module.exports = mongoose.accounts.model(`${config.mongo.accounts.collectionPrefix}Account`, Account);
+module.exports = ()=>
+  mongoose.accounts.model(`${config.mongo.accounts.collectionPrefix}Account`, Account);
