@@ -5,34 +5,31 @@
  */
 const mongoose = require('mongoose'),
   Promise = require('bluebird'),
-  config = require('./config');
+  config = require('./config'),
+  saveAccountForAddress = require('./helpers/saveAccountForAddress'),
+  connectToQueue = require('./helpers/connectToQueue'),
+  clearQueues = require('./helpers/clearQueues'),
+  _ = require('lodash'),
+  consumeMessages = require('./helpers/consumeMessages'),
+  createTransaction = require('./helpers/createTransaction'),
+  consumeStompMessages = require('./helpers/consumeStompMessages'),
+  models = require('../models'),
+  WebSocket = require('ws'),
+  expect = require('chai').expect,
+  amqp = require('amqplib'),
+  Stomp = require('webstomp-client');
+
+let amqpInstance;
 
 mongoose.Promise = Promise; // Use custom Promises
 mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
 mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 
-const saveAccountForAddress = require('./helpers/saveAccountForAddress'),
-  connectToQueue = require('./helpers/connectToQueue'),
-  clearQueues = require('./helpers/clearQueues'),
-  hashes = require('../services/hashes'),
-  _ = require('lodash'),
-  consumeMessages = require('./helpers/consumeMessages'),
-  createTransaction = require('./helpers/createTransaction'),
-  consumeStompMessages = require('./helpers/consumeStompMessages'),
-  blockModel = require('../models/blockModel'),
-  txModel = require('../models/txModel'),
-  accountModel = require('../models/accountModel'),
-  WebSocket = require('ws'),
-  expect = require('chai').expect,
-  amqp = require('amqplib'),
-
-  Stomp = require('webstomp-client');
-
-let amqpInstance;
 
 describe('core/block processor', function () {
 
   before(async () => {
+    await models.init();
     await saveAccountForAddress(config.dev.users.Alice.address);
     amqpInstance = await amqp.connect(config.rabbit.url);
     await clearQueues(amqpInstance);
@@ -41,6 +38,7 @@ describe('core/block processor', function () {
   after(async () => {
     await amqpInstance.close();
     await mongoose.disconnect();
+    await mongoose.accounts.close();
   });
 
   afterEach(async () => {
@@ -48,9 +46,9 @@ describe('core/block processor', function () {
   });
 
   it('check for blockHashing -- check that get new block', async () => {
-    const block = await blockModel.findOne({}).sort('-number');
+    const block = await models.blockModel.findOne({}).sort('-number');
     expect(block.number).to.be.greaterThan(0);
-    const tx = await txModel.findOne({}).sort('-blockNumber');
+    const tx = await models.txModel.findOne({}).sort('-blockNumber');
     expect(tx.blockNumber).to.be.greaterThan(0);
   });
 
@@ -79,14 +77,14 @@ describe('core/block processor', function () {
 
     const checkDb = async function (transaction) {
       if (transaction.blockNumber !== -1) {
-        const block = await blockModel.findOne({number: transaction.blockNumber});
+        const block = await models.blockModel.findOne({number: transaction.blockNumber});
         expect(block.number).to.equal(transaction.blockNumber);
         expect(block.txs).to.not.empty;
         const txHash = _.find(block.txs, hash => hash === transaction.hash);
         expect(txHash).to.not.undefined;
       }
 
-      const tx = await txModel.findOne({hash: transaction.hash});
+      const tx = await models.txModel.findOne({hash: transaction.hash});
       expect(tx.amount).to.equal(transaction.amount);
       expect(tx.sender).to.equal(transaction.sender);
       expect(tx.recipient).to.equal(transaction.recipient);
@@ -137,7 +135,7 @@ describe('core/block processor', function () {
   });
 
   it('delete accounts and send transfer transaction and after delay 0 messages', async () => {
-    await accountModel.remove();
+    await models.accountModel.remove();
     let tx = await createTransaction(config.dev.users.Bob.address, 0.000001, config.dev.users.Alice.privateKey);
     if (tx.code === 5) {
       tx = await createTransaction(config.dev.users.Alice.address, 0.000001, config.dev.users.Bob.privateKey);

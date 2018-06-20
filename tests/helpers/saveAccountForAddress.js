@@ -3,9 +3,9 @@
 * Licensed under the AGPL Version 3 license.
 * @author Kirill Sergeev <cloudkserg11@gmail.com>
 */
-const accountModel = require('../../models/accountModel');
+const models = require('../../models');
 module.exports = async (account) => {
-  return await accountModel.update({address: account}, {$set: {address: account}}, {
+  return await models.accountModel.update({address: account}, {$set: {address: account}}, {
     upsert: true,
     setDefaultsOnInsert: true
   });
