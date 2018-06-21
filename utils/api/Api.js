@@ -65,7 +65,16 @@ class Api {
       uri: new URL(url, this.http),
       json: true
     };
-    return Promise.resolve(request(options)).timeout(10000);
+
+    try {
+      return await Promise.resolve(request(options)).timeout(10000);
+    }catch (e) {
+      await Promise.delay(1000);
+      this.events.emit('disconnect');
+      return null;
+    }
+
+
   }
 
   /**
@@ -97,6 +106,16 @@ class Api {
     return data.height;
   }
 
+
+  /**
+   * @function
+   * @description check node health
+   * @return {Promise<*>}
+   */
+  async heartbeat () {
+    const data = await this._makeRequest('heartbeat');
+    return data.code;
+  }
 
 }
 
