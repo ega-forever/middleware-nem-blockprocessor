@@ -21,7 +21,7 @@ const bunyan = require('bunyan'),
 
 class ProviderService {
 
-  constructor() {
+  constructor () {
     this.events = new EventEmitter();
     this.connector = null;
 
@@ -35,7 +35,7 @@ class ProviderService {
    * @description reset the current connection
    * @return {Promise<void>}
    */
-  async resetConnector() {
+  async resetConnector () {
     this.switchConnector();
     this.events.emit('disconnected');
   }
@@ -45,18 +45,17 @@ class ProviderService {
    * @description choose the connector
    * @return {Promise<null|*>}
    */
-  async switchConnector() {
+  async switchConnector () {
 
     const providerURI = await Promise.any(config.node.providers.map(async providerURI => {
 
       const apiProvider = new Api(providerURI);
       await apiProvider.openWSProvider();
 
-      await apiProvider.getHeight();
+      await apiProvider.heartbeat();
       apiProvider.wsProvider.disconnect();
       return providerURI;
-    })).catch((e) => {
-      console.log(e);
+    })).catch(() => {
       log.error('no available connection!');
       process.exit(0);
     });
@@ -71,7 +70,7 @@ class ProviderService {
 
     this.pingIntervalId = setInterval(async () => {
 
-      const isConnected = await this.connector.getHeight().catch(() => false);
+      const isConnected = await this.connector.heartbeat().catch(() => false);
 
       if (isConnected === false) {
         clearInterval(this.pingIntervalId);
@@ -94,7 +93,7 @@ class ProviderService {
    * @description safe connector switching, by moving requests to
    * @return {Promise<bluebird>}
    */
-  async switchConnectorSafe() {
+  async switchConnectorSafe () {
 
     return new Promise(res => {
       sem.take(async () => {
@@ -110,7 +109,7 @@ class ProviderService {
    * @description
    * @return {Promise<*|bluebird>}
    */
-  async get() {
+  async get () {
     return this.connector || await this.switchConnectorSafe();
   }
 
