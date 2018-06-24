@@ -51,7 +51,6 @@ const init = async () => {
 
   await channel.assertExchange('events', 'topic', {durable: false});
   await channel.assertExchange('internal', 'topic', {durable: false});
-  //channel.bindQueue(`${config.rabbit.serviceName}_current_provider.set`, 'internal', `${config.rabbit.serviceName}_current_provider.set`);
   await channel.assertQueue(`${config.rabbit.serviceName}_current_provider.get`, {durable: false});
   await channel.bindQueue(`${config.rabbit.serviceName}_current_provider.get`, 'internal', `${config.rabbit.serviceName}_current_provider.get`);
 
