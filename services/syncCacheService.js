@@ -11,6 +11,7 @@ const bunyan = require('bunyan'),
   addBlock = require('../utils/blocks/addBlock'),
   EventEmitter = require('events'),
   providerService = require('../services/providerService'),
+  syncCacheServiceInterface = require('middleware-common-components/interfaces/blockProcessor/syncCacheServiceInterface'),
   allocateBlockBuckets = require('../utils/blocks/allocateBlockBuckets'),
   log = bunyan.createLogger({name: 'shared.services.syncCacheService'});
 
@@ -61,6 +62,17 @@ class SyncCacheService {
     while (buckets.length)
       try {
         for (let bucket of buckets) {
+
+          if (bucket.length === 2 && bucket.length !== (_.last(bucket) > bucket[0] ? _.last(bucket) - bucket[0] : bucket[0] - _.last(bucket)) + 1) {
+
+            let blocksToProcess = [];
+            for (let blockNumber = _.last(bucket); blockNumber >= bucket[0]; blockNumber--)
+              blocksToProcess.push(blockNumber);
+
+            _.pullAll(bucket, bucket);
+            bucket.push(...blocksToProcess);
+          }
+
           await this.runPeer(bucket);
           if (!bucket.length)
             _.pull(buckets, bucket);
@@ -89,11 +101,7 @@ class SyncCacheService {
 
     log.info(`nem provider took chuck of blocks ${bucket[0]} - ${_.last(bucket)}`);
 
-    let blocksToProcess = [];
-    for (let blockNumber = _.last(bucket); blockNumber >= bucket[0]; blockNumber--)
-      blocksToProcess.push(blockNumber);
-
-    await Promise.mapSeries(blocksToProcess, async (blockNumber) => {
+    await Promise.mapSeries(bucket, async (blockNumber) => {
       let block = await getBlock(blockNumber);
       await addBlock(block);
       _.pull(bucket, blockNumber);
@@ -102,4 +110,6 @@ class SyncCacheService {
   }
 }
 
-module.exports = SyncCacheService;
+module.exports = function (...args) {
+  return syncCacheServiceInterface(new SyncCacheService(...args));
+};
