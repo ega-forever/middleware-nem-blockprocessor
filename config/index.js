@@ -8,12 +8,25 @@ const _ = require('lodash');
 
 require('dotenv').config();
 
+/** @function
+ * @description build default connection URI
+ * @returns {string}
+ */
+
 const getDefault = () => {
   return (
     (process.env.NIS || 'http://192.3.61.243:7890') + '@' +  
     (process.env.WEBSOCKET_NIS || 'http://192.3.61.243:7778')
   );
 };
+
+
+/**
+ * @function
+ * @description return the array of providers
+ * @param providers - the string of providers
+ * @returns Array<{uri: String, zmq: String}>
+ */
 
 const createConfigProviders = (providers) => {
   return _.chain(providers)
@@ -27,6 +40,32 @@ const createConfigProviders = (providers) => {
     })
     .value();
 };
+
+/**
+ *
+ * @type {{
+ *  mongo: {
+ *    accounts: {
+ *      uri: (*|string),
+ *      collectionPrefix: (*|string)
+ *      },
+ *    data: {
+ *      uri: (*|string),
+ *      collectionPrefix: (*|string)
+ *      }
+ *  },
+ *  sync: {
+ *    shadow: number | boolean},
+ *    node: {
+ *      network: number,
+ *      providers: Array<{uri: String, zmq: String}>},
+ *      rabbit: {
+ *        url: (string),
+ *        serviceName: (string)
+ *        }
+ *      }
+ *  }
+ */
 
 const config = {
   mongo: {
@@ -44,11 +83,7 @@ const config = {
   },
   node: {
     network: parseInt(process.env.NETWORK) || -104,
-    networkName: process.env.NETWORK_NAME || 'testnet',
     providers: createConfigProviders(process.env.PROVIDERS || getDefault())
-  },
-  consensus: {
-    lastBlocksValidateAmount: parseInt(process.env.CONSENSUS_BLOCK_VALIDATE_AMOUNT) || 10
   },
   rabbit: {
     url: process.env.RABBIT_URI || 'amqp://localhost:5672',
