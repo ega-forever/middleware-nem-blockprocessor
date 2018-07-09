@@ -29,8 +29,7 @@ class Api {
    */
   _buildWSProvider () {
     const ws = new SockJS(`${this.ws}/w/messages`);
-    const stompOver = Stomp.over ? Stomp.over : Stomp.default.over;
-    const client = stompOver(ws, {heartbeat: true, debug: false});
+    const client = Stomp.over(ws, {heartbeat: true, debug: false});
     ws.onclose = () => this.events.emit('disconnect');
     ws.onerror = () => this.events.emit('disconnect');
     return client;
