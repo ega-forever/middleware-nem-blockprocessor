@@ -95,6 +95,10 @@ class Api {
     });
   }
 
+  async getUnconfirmedTransaction (address) {
+    const data = await this._makeRequest('account/unconfirmedTransactions?address=' + address)
+    return data[0].transaction;
+  }
 
   /**
    * @function

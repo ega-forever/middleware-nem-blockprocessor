@@ -3,15 +3,15 @@
  * Licensed under the AGPL Version 3 license.
  * @author Kirill Sergeev <cloudkserg11@gmail.com>
  */
-const hashes = require('../utils/hashes/hashes'),
+const hashes = require('../../utils/hashes/hashes'),
   _ = require('lodash'),
   config = require('../config'),
   expect = require('chai').expect,
-  Api = require('../utils/api/Api'),
+  Api = require('../../utils/api/Api'),
   Promise = require('bluebird');
 
 
-describe('core/block processor', function () {
+module.exports  = function () {
 
 
   it('check hash for simple block [just fake]', () => {
@@ -90,4 +90,5 @@ describe('core/block processor', function () {
     expect(hashes.calculateTransactionHash(tx)).to.be.equal('a5006fc20e1ef2d1d50177de7982246ea62070af7b8befca765d39c78b169551');
   });
 
-});
+};
+
