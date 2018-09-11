@@ -8,9 +8,10 @@ const bunyan = require('bunyan'),
   sem = require('semaphore')(3),
   _ = require('lodash'),
   Promise = require('bluebird'),
+  config = require('../../config'),
   models = require('../../models'),
   removeUnconfirmedTxs = require('../txs/removeUnconfirmedTxs'),
-  log = bunyan.createLogger({name: 'app.services.addBlock'});
+  log = bunyan.createLogger({name: 'utils.blocks.addBlock', level: config.logs.level});
 
 /**
  * @function
