@@ -9,10 +9,10 @@ require('dotenv/config');
 const models = require('../../models'),
   config = require('../config'),
   sender = require('../utils/sender'),
-  _ = require('lodash'),
   expect = require('chai').expect,
   Promise = require('bluebird'),
-  spawn = require('child_process').spawn;
+  spawn = require('child_process').spawn,
+  providerService = require('../../services/providerService');
 
 module.exports = (ctx) => {
 
@@ -21,47 +21,40 @@ module.exports = (ctx) => {
     await models.txModel.remove({});
     await models.accountModel.remove({});
 
+
     ctx.blockProcessorPid = spawn('node', ['index.js'], {env: process.env, stdio: 'ignore'});
     await Promise.delay(10000);
   });
 
   it('validate block event', async () => {
-    const generatedBlockNumbers = [];
-
+    const instance = await providerService.get();
+    const nextBlock = await instance.getHeight() + 2;
     await Promise.all([
       (async () => {
-        await ctx.amqp.channel.assertQueue(`app_${config.rabbit.serviceName}_test_features.block`);
+        await ctx.amqp.channel.assertQueue(`app_${config.rabbit.serviceName}_test_features.block`, {autoDelete: true, durable: false});
         await ctx.amqp.channel.bindQueue(`app_${config.rabbit.serviceName}_test_features.block`, 'events', `${config.rabbit.serviceName}_block`);
         await new Promise(res =>
           ctx.amqp.channel.consume(`app_${config.rabbit.serviceName}_test_features.block`, async data => {
-
             if (!data)
               return;
 
             const message = JSON.parse(data.content.toString());
             expect(message).to.have.all.keys('block');
 
-            _.pull(generatedBlockNumbers, message.block);
-
-            if (generatedBlockNumbers.length)
-              return;
-
+            expect(message.block).to.lessThan(nextBlock);
             await ctx.amqp.channel.deleteQueue(`app_${config.rabbit.serviceName}_test_features.block`);
             res();
           }, {noAck: true})
         );
       })(),
       (async () => {
-        for (let number = 1; number <= 1000; number++)
-          generatedBlockNumbers.push(number);
-
         await sender.sendTransaction(ctx.accounts, 0.000001);
       })()
     ]);
   });
 
   it('validate transaction event for registered user', async () => {
-    await new models.accountModel({address: ctx.accounts[0].address}).save();
+    await new models.accountModel({address: ctx.accounts[1].address}).save();
 
     let tx;
 
@@ -76,14 +69,24 @@ module.exports = (ctx) => {
           ctx.amqp.channel.consume(
             `app_${config.rabbit.serviceName}_test_features.transaction`, 
             async data => {
-
               if(!data)
                 return;  
 
-
               const message = JSON.parse(data.content.toString());
-              expect(message).to.have.all.keys('index', 'timeStamp', 'blockNumber', 'hash', 
-                'amount', 'recipient', 'sender');
+
+              expect(message).to.have.all.keys(
+                'blockNumber',
+                'timeStamp',
+                'amount',
+                'hash',
+                'recipient',
+                'fee',
+                'messagePayload',
+                'messageType',
+                'mosaics',
+                'sender',
+                'address'
+              );
 
               if (tx && message.timeStamp !== tx.timeStamp)
                 return;
@@ -110,7 +113,7 @@ module.exports = (ctx) => {
           `app_${config.rabbit.serviceName}_test_features.transaction`);
         await ctx.amqp.channel.bindQueue(
           `app_${config.rabbit.serviceName}_test_features.transaction`, 'events', 
-          `${config.rabbit.serviceName}_transaction.${ctx.accounts[1].address}`
+          `${config.rabbit.serviceName}_transaction.${ctx.accounts[0].address}`
         );
         await new Promise((res, rej) => {
           ctx.amqp.channel.consume(

@@ -26,7 +26,7 @@ module.exports = (ctx) => {
 
 
   it('validate sync cache service performance', async () => {
-    const instance = providerService.getConnectorFromURI(config.node.providers[0].uri);
+    const instance = await providerService.get();
     const blockNumber = await instance.getHeight();
     const addBlocksCount = 50 - blockNumber;
 
@@ -47,7 +47,7 @@ module.exports = (ctx) => {
 
 
   it('validate block watching service performance', async () => {
-    const instance = providerService.getConnectorFromURI(config.node.providers[0].uri);
+    const instance = await providerService.get();
     let blockNumber = await instance.getHeight();
     const addBlocksCount = 50 - blockNumber;
 
@@ -119,7 +119,7 @@ module.exports = (ctx) => {
   });
 
   it('unconfirmed txs performance', async () => {
-    const instance = providerService.getConnectorFromURI(config.node.providers[0].uri);
+    const instance = await providerService.get();
 
     let currentNodeHeight = await instance.getHeight();
     const blockWatchingService = new BlockWatchingService(currentNodeHeight);
