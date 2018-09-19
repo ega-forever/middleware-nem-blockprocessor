@@ -1,8 +1,9 @@
 {
-  "name": "middleware-nem-blockprocessor",
-  "version": "0.0.1",
+  "name": "middleware_nem.blockProcessor",
+  "version": "1.0.0",
   "description": "Middleware NEM blockprocessor",
   "main": "index.js",
+  "requirements": {},
   "scripts": {
     "lint": "node ./node_modules/eslint/bin/eslint.js -c .eslintrc.js --ext .js --fix --ignore-path .eslintignore .",
     "test": "node ./node_modules/mocha/bin/mocha -t 1800000 tests"
@@ -44,6 +45,7 @@
     "keccak": "^1.4.0",
     "lodash": "^4.17.4",
     "middleware-common-components": "github:ChronoBank/middleware-common-components",
+    "middleware-common-infrastructure": "github:ChronoBank/middleware-common-infrastructure",
     "mongoose": "^4.13.6",
     "mongoose-long": "^0.1.1",
     "nem-sdk": "^1.6.2",
