@@ -17,9 +17,9 @@ const config = require('./config'),
   _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
-  AmqpService = require('middleware-common-infrastructure/AmqpService'),
-  InfrastructureInfo = require('middleware-common-infrastructure/InfrastructureInfo'),
-  InfrastructureService = require('middleware-common-infrastructure/InfrastructureService'),
+  AmqpService = require('middleware_common_infrastructure/AmqpService'),
+  InfrastructureInfo = require('middleware_common_infrastructure/InfrastructureInfo'),
+  InfrastructureService = require('middleware_common_infrastructure/InfrastructureService'),
   
   models = require('./models'),
   log = bunyan.createLogger({name: 'core.blockProcessor', level: config.logs.level}),
@@ -33,25 +33,27 @@ mongoose.Promise = Promise; // Use custom Promises
 mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
 mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 
-const runInfrastucture = async function () {
+const runSystem = async function () {
   const rabbit = new AmqpService(
-    config.infrastructureRabbit.url, 
-    config.infrastructureRabbit.exchange,
-    config.infrastructureRabbit.serviceName
+    config.systemRabbit.url, 
+    config.systemRabbit.exchange,
+    config.systemRabbit.serviceName
   );
-  const info = InfrastructureInfo(require('./package.json'));
-  const infrastructure = new InfrastructureService(info, rabbit, {checkInterval: 10000});
-  await infrastructure.start();
-  infrastructure.on(infrastructure.REQUIREMENT_ERROR, ({requirement, version}) => {
+  const info = new InfrastructureInfo(require('./package.json'));
+  const system = new InfrastructureService(info, rabbit, {checkInterval: 10000});
+  await system.start();
+  system.on(system.REQUIREMENT_ERROR, ({requirement, version}) => {
     log.error(`Not found requirement with name ${requirement.name} version=${requirement.version}.` +
         ` Last version of this middleware=${version}`);
     process.exit(1);
   });
-  await infrastructure.checkRequirements();
-  infrastructure.periodicallyCheck();
+  await system.checkRequirements();
+  system.periodicallyCheck();
 };
 
 const init = async () => {
+  if (config.checkSystem)
+    await runSystem();
 
 
   [mongoose.accounts, mongoose.connection].forEach(connection =>
@@ -62,8 +64,8 @@ const init = async () => {
 
   models.init();
 
-  if (config.checkInfrastructure)
-    await runInfrastucture();
+  if (config.checkSystem)
+    await runSystem();
 
   let amqpInstance = await amqp.connect(config.rabbit.url);
 
