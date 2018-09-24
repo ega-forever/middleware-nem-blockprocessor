@@ -17,8 +17,12 @@ const config = require('./config'),
   _ = require('lodash'),
   bunyan = require('bunyan'),
   amqp = require('amqplib'),
+  AmqpService = require('middleware_common_infrastructure/AmqpService'),
+  InfrastructureInfo = require('middleware_common_infrastructure/InfrastructureInfo'),
+  InfrastructureService = require('middleware_common_infrastructure/InfrastructureService'),
+  
   models = require('./models'),
-  log = bunyan.createLogger({name: 'nem-blockprocessor'}),
+  log = bunyan.createLogger({name: 'core.blockProcessor', level: config.logs.level}),
   MasterNodeService = require('middleware-common-components/services/blockProcessor/MasterNodeService'),
   BlockWatchingService = require('./services/blockWatchingService'),
   SyncCacheService = require('./services/syncCacheService'),
@@ -29,7 +33,27 @@ mongoose.Promise = Promise; // Use custom Promises
 mongoose.connect(config.mongo.data.uri, {useMongoClient: true});
 mongoose.accounts = mongoose.createConnection(config.mongo.accounts.uri);
 
+const runSystem = async function () {
+  const rabbit = new AmqpService(
+    config.systemRabbit.url, 
+    config.systemRabbit.exchange,
+    config.systemRabbit.serviceName
+  );
+  const info = new InfrastructureInfo(require('./package.json'));
+  const system = new InfrastructureService(info, rabbit, {checkInterval: 10000});
+  await system.start();
+  system.on(system.REQUIREMENT_ERROR, ({requirement, version}) => {
+    log.error(`Not found requirement with name ${requirement.name} version=${requirement.version}.` +
+        ` Last version of this middleware=${version}`);
+    process.exit(1);
+  });
+  await system.checkRequirements();
+  system.periodicallyCheck();
+};
+
 const init = async () => {
+  if (config.checkSystem)
+    await runSystem();
 
 
   [mongoose.accounts, mongoose.connection].forEach(connection =>
@@ -40,6 +64,8 @@ const init = async () => {
 
   models.init();
 
+  if (config.checkSystem)
+    await runSystem();
 
   let amqpInstance = await amqp.connect(config.rabbit.url);
 
@@ -76,6 +102,7 @@ const init = async () => {
 
   let blockEventCallback = async block => {
     log.info(`${block.hash} (${block.number}) added to cache.`);
+    await channel.publish('events', `${config.rabbit.serviceName}_block`, new Buffer(JSON.stringify({block: block.number})));
     let filtered = await filterTxsByAccountsService(block.txs);
     await Promise.all(filtered.map(item =>
       channel.publish('events', `${config.rabbit.serviceName}_transaction.${item.address}`, new Buffer(JSON.stringify(Object.assign(item))))

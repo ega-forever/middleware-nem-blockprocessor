@@ -95,6 +95,18 @@ class Api {
     });
   }
 
+  async getUnconfirmedTransaction (address) {
+    const data = await this._makeRequest('account/unconfirmedTransactions?address=' + address);
+    return data.data[0].transaction;
+  }
+
+  async getTransaction (address, hash) {
+    let url = 'account/transfers/all?address=' + address;
+    if (hash)
+      url += '&hash=' + hash;
+    const data = await this._makeRequest(url);
+    return data.data[0].transaction;
+  }
 
   /**
    * @function

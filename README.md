@@ -180,6 +180,10 @@ The options are presented below:
 | NIS(deprecated) | address of res api endpoint
 | WEBSOCKET_NIS(deprecated) | address of node websocket endpoint
 | PROVIDERS   | 'the path to node rest api'@'the path to node websocket'
+| SYSTEM_RABBIT_URI   | rabbitmq URI connection string for infrastructure
+| SYSTEM_RABBIT_SERVICE_NAME   | rabbitmq service name for infrastructure
+| SYSTEM_RABBIT_EXCHANGE   | rabbitmq exchange name for infrastructure
+| CHECK_SYSTEM | check infrastructure or not (default = true)
 
 License
 ----
