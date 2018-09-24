@@ -8,7 +8,8 @@ const bunyan = require('bunyan'),
   models = require('../../models'),
   _ = require('lodash'),
   transformTx = require('./transformTx'),
-  log = bunyan.createLogger({name: 'app.utils.addUnconfirmedTx'});
+  config = require('../../config'),
+  log = bunyan.createLogger({name: 'utils.txs.addUnconfirmedTx', level: config.logs.level});
 
 /**
  * @function

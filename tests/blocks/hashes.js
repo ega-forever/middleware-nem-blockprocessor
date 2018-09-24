@@ -3,15 +3,14 @@
  * Licensed under the AGPL Version 3 license.
  * @author Kirill Sergeev <cloudkserg11@gmail.com>
  */
-const hashes = require('../utils/hashes/hashes'),
+const hashes = require('../../utils/hashes/hashes'),
   _ = require('lodash'),
-  config = require('../config'),
+  providerService = require('../../services/providerService'),
   expect = require('chai').expect,
-  Api = require('../utils/api/Api'),
   Promise = require('bluebird');
 
 
-describe('core/block processor', function () {
+module.exports  = function () {
 
 
   it('check hash for simple block [just fake]', () => {
@@ -73,7 +72,7 @@ describe('core/block processor', function () {
     };
 
     const blockIds = _.reduce(exampleBlocks, (result, block) => _.merge(result, block), []);
-    const api = new Api(config.node.providers[0]);
+    const api = await providerService.get();
 
 
     await Promise.map(blockIds, async (blockId) => {
@@ -84,10 +83,11 @@ describe('core/block processor', function () {
   });
 
   it('check transaction hash', async () => {
-    const api = new Api(config.node.providers[0]);
+    const api = await providerService.get();
     const block = await api.getBlockByNumber(1468878);
     const tx = block.transactions[0];
     expect(hashes.calculateTransactionHash(tx)).to.be.equal('a5006fc20e1ef2d1d50177de7982246ea62070af7b8befca765d39c78b169551');
   });
 
-});
+};
+
