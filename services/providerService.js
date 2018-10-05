@@ -19,10 +19,10 @@ const bunyan = require('bunyan'),
  * @returns Object<ProviderService>
  */
 
-class ProviderService {
+class ProviderService extends EventEmitter{
 
   constructor () {
-    this.events = new EventEmitter();
+    super();
     this.connector = null;
 
     if (config.node.providers.length > 1)
@@ -37,7 +37,7 @@ class ProviderService {
    */
   async resetConnector () {
     this.switchConnector();
-    this.events.emit('disconnected');
+    this.emit('disconnected');
   }
 
   /**
@@ -50,10 +50,16 @@ class ProviderService {
     const providerURI = await Promise.any(config.node.providers.map(async providerURI => {
 
       const apiProvider = new Api(providerURI);
-      await apiProvider.openWSProvider();
+
+      try {
+        await Promise.resolve(apiProvider.openWSProvider()).timeout(20000);
+        apiProvider.wsProvider.disconnect();
+      } catch (err) {
+        apiProvider.wsProvider.disconnect();
+        throw new Error(err);
+      }
 
       await apiProvider.heartbeat();
-      apiProvider.wsProvider.disconnect();
       return providerURI;
     })).catch(() => {
       log.error('no available connection!');
@@ -63,10 +69,10 @@ class ProviderService {
     if (this.connector && this.connector.http === providerURI.http)
       return;
 
-    this.events.emit('provider_set', providerURI);
+    this.emit('provider_set', providerURI);
 
     this.connector = new Api(providerURI);
-    this.connector.events.on('disconnect', () => this.resetConnector());
+    this.connector.on('disconnect', () => this.resetConnector());
 
     this.pingIntervalId = setInterval(async () => {
 
@@ -81,7 +87,7 @@ class ProviderService {
     await this.connector.openWSProvider();
 
     this.connector.wsProvider.subscribe('/unconfirmed', (message) => {
-      this.events.emit('unconfirmedTx', JSON.parse(message.body));
+      this.emit('unconfirmedTx', JSON.parse(message.body));
     });
 
     return this.connector;

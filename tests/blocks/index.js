@@ -22,12 +22,11 @@ module.exports = (ctx) => {
 
   describe('hashes', () => hashesTests(ctx));
 
-  before (async () => {
+  before(async () => {
     await models.blockModel.remove({});
     await models.txModel.remove({});
     await models.accountModel.remove({});
   });
-
 
 
   it('get block', async () => {
@@ -40,8 +39,8 @@ module.exports = (ctx) => {
     expect(block).to.have.keys('number', 'hash', 'signer', 'timestamp', 'txs');
     expect(block.hash).to.equal(hashes.calculateBlockHash(blockFromNode));
 
-    for (let tx of block.txs) 
-      expect(tx).to.have.keys('hash', 'blockNumber', 'timeStamp', 'amount', 'recipient', 
+    for (let tx of block.txs)
+      expect(tx).to.have.keys('hash', 'blockNumber', 'timeStamp', 'amount', 'recipient',
         'messagePayload',
         'messageType',
         'mosaics',
@@ -67,7 +66,10 @@ module.exports = (ctx) => {
 
   it('find missed blocks', async () => {
 
-    ctx.blockProcessorPid = spawn('node', ['index.js'], {env: process.env, stdio: 'ignore'});
+    ctx.blockProcessorPid = spawn('node', ['index.js'], {
+      env: _.merge({PROVIDERS: ctx.providers.join(',')}, process.env),
+      stdio: 'ignore'
+    });
     await Promise.delay(30000);
     ctx.blockProcessorPid.kill();
 
@@ -100,8 +102,32 @@ module.exports = (ctx) => {
   });
 
   it('add unconfirmed tx', async () => {
+
+    let oldTx = await models.txModel.findOne();
+
+    if (!oldTx)
+      await new Promise(res => {
+
+        ctx.blockProcessorPid = spawn('node', ['index.js'], {
+          env: _.merge({PROVIDERS: ctx.providers.join(',')}, process.env),
+          stdio: 'ignore'
+        });
+
+        let interval = setInterval(async () => {
+
+          let txCount = await models.txModel.count();
+
+          if (!txCount)
+            return;
+
+          clearInterval(interval);
+          ctx.blockProcessorPid.kill();
+          res();
+        }, 5000);
+      });
+
     const instance = await providerService.get();
-    const oldTx = await models.txModel.findOne();
+    oldTx = await models.txModel.findOne();
     const oldTxRaw = await instance.getTransaction(oldTx.sender, oldTx._id);
 
     const newTxRaw = _.cloneDeep(oldTxRaw);

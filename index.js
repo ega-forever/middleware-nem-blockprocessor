@@ -77,14 +77,14 @@ const init = async () => {
 
   await channel.assertExchange('events', 'topic', {durable: false});
   await channel.assertExchange('internal', 'topic', {durable: false});
-  await channel.assertQueue(`${config.rabbit.serviceName}_current_provider.get`, {durable: false});
+  await channel.assertQueue(`${config.rabbit.serviceName}_current_provider.get`, {durable: false, autoDelete: true});
   await channel.bindQueue(`${config.rabbit.serviceName}_current_provider.get`, 'internal', `${config.rabbit.serviceName}_current_provider.get`);
 
 
   const masterNodeService = new MasterNodeService(channel, config.rabbit.serviceName);
   await masterNodeService.start();
 
-  providerService.events.on('provider_set', providerURI => {
+  providerService.on('provider_set', providerURI => {
     let providerIndex = _.findIndex(config.node.providers, providerURI);
     if (providerIndex !== -1)
       channel.publish('internal', `${config.rabbit.serviceName}_current_provider.set`, new Buffer(JSON.stringify({index: providerIndex})));
@@ -117,7 +117,7 @@ const init = async () => {
   };
 
 
-  syncCacheService.events.on('block', blockEventCallback);
+  syncCacheService.on('block', blockEventCallback);
 
   let endBlock = await syncCacheService.start();
 
@@ -125,15 +125,15 @@ const init = async () => {
     if (config.sync.shadow)
       return res();
 
-    syncCacheService.events.on('end', () => {
+    syncCacheService.on('end', () => {
       log.info(`cached the whole blockchain up to block: ${endBlock}`);
       res();
     });
   });
 
   const blockWatchingService = new BlockWatchingService(endBlock);
-  blockWatchingService.events.on('block', blockEventCallback);
-  blockWatchingService.events.on('tx', txEventCallback);
+  blockWatchingService.on('block', blockEventCallback);
+  blockWatchingService.on('tx', txEventCallback);
 
   await blockWatchingService.startSync();
 

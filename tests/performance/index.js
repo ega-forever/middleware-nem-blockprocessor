@@ -9,11 +9,11 @@ const config = require('../../config'),
   spawn = require('child_process').spawn,
   expect = require('chai').expect,
   Promise = require('bluebird'),
+  _ = require('lodash'),
   SyncCacheService = require('../../services/syncCacheService'),
   BlockWatchingService = require('../../services/blockWatchingService'),
   providerService = require('../../services/providerService'),
-  sender = require('../utils/sender'),
-  _ = require('lodash');
+  sender = require('../utils/sender');
 
 module.exports = (ctx) => {
 
@@ -24,27 +24,26 @@ module.exports = (ctx) => {
     global.gc();
   });
 
-
   it('validate sync cache service performance', async () => {
     const instance = await providerService.get();
-    const blockNumber = await instance.getHeight();
+    let blockNumber = await instance.getHeight();
     const addBlocksCount = 50 - blockNumber;
 
     if (addBlocksCount > 0)
       for (let i = 0; i < addBlocksCount; i++)
         await sender.sendTransaction(ctx.accounts, 0.00001);
 
+    blockNumber = await instance.getHeight();
     const memUsage = process.memoryUsage().heapUsed / 1024 / 1024;
     const syncCacheService = new SyncCacheService();
-    await syncCacheService.start();
+    syncCacheService.doJob([[blockNumber - 50, blockNumber]]);
     await new Promise(res => syncCacheService.once('end', res));
     global.gc();
-    await Promise.delay(10000);
+    await Promise.delay(5000);
     const memUsage2 = process.memoryUsage().heapUsed / 1024 / 1024;
 
     expect(memUsage2 - memUsage).to.be.below(3);
   });
-
 
   it('validate block watching service performance', async () => {
     const instance = await providerService.get();
@@ -69,8 +68,12 @@ module.exports = (ctx) => {
     expect(memUsage2 - memUsage).to.be.below(3);
   });
 
+
   it('validate tx notification speed', async () => {
-    ctx.blockProcessorPid = spawn('node', ['index.js'], {env: process.env, stdio: 'ignore'});
+    ctx.blockProcessorPid = spawn('node', ['index.js'], {
+      env: _.merge({PROVIDERS: ctx.providers.join(',')}, process.env),
+      stdio: 'ignore'
+    });
     await Promise.delay(10000);
     await new models.accountModel({address: ctx.accounts[0].address}).save();
 
@@ -80,30 +83,24 @@ module.exports = (ctx) => {
 
     await Promise.all([
       (async () => {
-        await ctx.amqp.channel.assertQueue(
-          `app_${config.rabbit.serviceName}_test_performance.transaction`);
-        await ctx.amqp.channel.bindQueue(
-          `app_${config.rabbit.serviceName}_test_performance.transaction`, 'events', 
-          `${config.rabbit.serviceName}_transaction.${ctx.accounts[0].address}`);
+        await ctx.amqp.channel.assertQueue(`app_${config.rabbit.serviceName}_test_performance.transaction`);
+        await ctx.amqp.channel.bindQueue(`app_${config.rabbit.serviceName}_test_performance.transaction`, 'events', `${config.rabbit.serviceName}_transaction.${ctx.accounts[0].address}`);
         await new Promise(res =>
-          ctx.amqp.channel.consume(
-            `app_${config.rabbit.serviceName}_test_performance.transaction`, 
-            async data => {
+          ctx.amqp.channel.consume(`app_${config.rabbit.serviceName}_test_performance.transaction`, async data => {
 
-              if (!data)
-                return;
+            if (!data)
+              return;
 
-              const message = JSON.parse(data.content.toString());
+            const message = JSON.parse(data.content.toString());
 
-              if (tx && message.timeStamp !== tx.timeStamp)
-                return;
+            if (tx && message.hash !== tx.transactionHash.data)
+              return;
 
-              end = Date.now();
-              await ctx.amqp.channel.deleteQueue(
-                `app_${config.rabbit.serviceName}_test_performance.transaction`);
-              res();
+            end = Date.now();
+            await ctx.amqp.channel.deleteQueue(`app_${config.rabbit.serviceName}_test_performance.transaction`);
+            res();
 
-            }, {noAck: true})
+          }, {noAck: true, autoDelete: true})
         );
       })(),
       (async () => {
@@ -113,21 +110,27 @@ module.exports = (ctx) => {
       })()
     ]);
 
-    expect(end - start).to.be.below(500);
+    expect(end - start).to.be.below(2000);
     await Promise.delay(15000);
     ctx.blockProcessorPid.kill();
   });
 
+
   it('unconfirmed txs performance', async () => {
     const instance = await providerService.get();
 
-    let currentNodeHeight = await instance.getHeight();
-    const blockWatchingService = new BlockWatchingService(currentNodeHeight);
+    let blockNumber = await instance.getHeight();
+    const blockWatchingService = new BlockWatchingService(blockNumber);
 
+    await models.txModel.remove({blockNumber: {$gte: blockNumber - 50}});
     let txCount = await models.txModel.count();
-    let txs = await Promise.mapSeries(new Array(100), async () => {
-      await sender.sendTransaction(ctx.accounts, 0.00001);
-    });
+
+    let blocks = [];
+    for (let index = blockNumber - 50; index < blockNumber; index++)
+      blocks.push(index);
+
+    let txs = await Promise.mapSeries(blocks, async block => await instance.getBlockByNumber(block));
+    txs = _.chain(txs).map(txs => txs.transactions).flattenDeep().value();
 
     const memUsage = process.memoryUsage().heapUsed / 1024 / 1024;
 
@@ -153,11 +156,7 @@ module.exports = (ctx) => {
     await Promise.delay(60000);
     const memUsage2 = process.memoryUsage().heapUsed / 1024 / 1024;
     expect(memUsage2 - memUsage).to.be.below(3);
-
-
   });
-
-
 
 
 };

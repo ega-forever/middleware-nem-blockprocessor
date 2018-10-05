@@ -24,10 +24,10 @@ const bunyan = require('bunyan'),
  * @returns Object<BlockWatchingService>
  */
 
-class BlockWatchingService {
+class BlockWatchingService extends EventEmitter {
 
   constructor (currentHeight) {
-    this.events = new EventEmitter();
+    super();
     this.currentHeight = currentHeight;
     this.isSyncing = false;
   }
@@ -52,7 +52,7 @@ class BlockWatchingService {
     this.doJob();
 
     this.unconfirmedTxEventCallback = result => this.unconfirmedTxEvent(result).catch();
-    providerService.events.on('unconfirmedTx', this.unconfirmedTxEventCallback);
+    providerService.on('unconfirmedTx', this.unconfirmedTxEventCallback);
 
   }
 
@@ -70,7 +70,7 @@ class BlockWatchingService {
 
         this.currentHeight++;
         this.lastBlockHash = block.hash;
-        this.events.emit('block', block);
+        this.emit('block', block);
       } catch (err) {
 
         if (err && err.code === 0) {
@@ -104,7 +104,7 @@ class BlockWatchingService {
    */
   async unconfirmedTxEvent (tx) {
     tx = await addUnconfirmedTx(tx);
-    this.events.emit('tx', tx);
+    this.emit('tx', tx);
   }
 
   /**
@@ -114,6 +114,7 @@ class BlockWatchingService {
    */
   async stopSync () {
     this.isSyncing = false;
+    providerService.removeListener('unconfirmedTx', this.unconfirmedTxEventCallback);
   }
 
 

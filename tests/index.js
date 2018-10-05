@@ -16,6 +16,9 @@ const config = require('./config'),
   Promise = require('bluebird'),
   mongoose = require('mongoose'),
   amqp = require('amqplib'),
+  _ = require('lodash'),
+  nodeUrls = require('nem-sdk').default.model.nodes.testnet,
+  providerService = require('../services/providerService'),
   ctx = {};
 
 mongoose.Promise = Promise;
@@ -38,11 +41,28 @@ describe('core/blockProcessor', function () {
     ctx.amqp.instance = await amqp.connect(config.rabbit.url);
     ctx.amqp.channel = await ctx.amqp.instance.createChannel();
     await ctx.amqp.channel.assertExchange('events', 'topic', {durable: false});
+
+    ctx.providers = _.chain(nodeUrls)
+      .reject(item => /localhost/.test(item.uri))
+      .map(item => `${item.uri}:7890@${item.uri}:7778`)
+      .value();
+
+    config.node.providers = _.chain(nodeUrls)
+      .reject(item => /localhost/.test(item.uri))
+      .map(item => ({
+        http: `${item.uri}:7890`,
+        ws: `${item.uri}:7778`
+      }))
+      .value();
+
   });
 
   after(async () => {
     mongoose.disconnect();
     mongoose.accounts.close();
+    providerService.connector.wsProvider.disconnect();
+    clearInterval(providerService.findBestNodeInterval);
+    clearInterval(providerService.pingIntervalId);
     await ctx.amqp.instance.close();
   });
 

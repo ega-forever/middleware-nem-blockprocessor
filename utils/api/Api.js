@@ -13,12 +13,12 @@ const EventEmitter = require('events'),
  * @description http provider for nem node
  */
 
-class Api {
+class Api extends EventEmitter {
 
   constructor (URI) {
+    super();
     this.http = URI.http;
     this.ws = URI.ws;
-    this.events = new EventEmitter();
   }
 
   /**
@@ -30,8 +30,8 @@ class Api {
   _buildWSProvider () {
     const ws = new SockJS(`${this.ws}/w/messages`);
     const client = Stomp.over(ws, {heartbeat: true, debug: false});
-    ws.onclose = () => this.events.emit('disconnect');
-    ws.onerror = () => this.events.emit('disconnect');
+    ws.onclose = () => this.emit('disconnect');
+    ws.onerror = () => this.emit('disconnect');
     return client;
   }
 
@@ -70,7 +70,7 @@ class Api {
       return await Promise.resolve(request(options)).timeout(10000);
     }catch (e) {
       await Promise.delay(1000);
-      this.events.emit('disconnect');
+      this.emit('disconnect');
       return null;
     }
 
